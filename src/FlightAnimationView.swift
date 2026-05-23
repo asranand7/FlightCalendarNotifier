@@ -41,9 +41,9 @@ struct FlightAnimationView: View {
     
     private var flightDuration: Double {
         switch flightSpeedName.lowercased() {
-        case "slow": return 12.0
-        case "fast": return 5.0
-        default: return 8.0
+        case "slow": return 18.0
+        case "fast": return 8.0
+        default: return 13.0
         }
     }
     
@@ -207,12 +207,13 @@ struct BannerView: View {
         }
     }
     
+    private var isTodoist: Bool { platform?.lowercased().contains("todoist") == true }
+
     private var platformIcon: String {
         guard let plat = platform?.lowercased() else { return "calendar" }
         if plat.contains("meet") { return "video" }
         if plat.contains("zoom") { return "video.circle" }
         if plat.contains("teams") { return "video" }
-        if plat.contains("todoist") { return "checkmark.circle" }
         return "mappin.and.ellipse"
     }
     
@@ -302,7 +303,23 @@ struct BannerView: View {
                         .padding(.vertical, 8)
                     
                     VStack(alignment: .center, spacing: 5) {
-                        if let urlString = meetingUrl, let _ = URL(string: urlString) {
+                        if isTodoist {
+                            VStack(spacing: 4) {
+                                TodoistLogo(size: 28)
+                                if let urlString = meetingUrl, let url = URL(string: urlString) {
+                                    Button(action: { NSWorkspace.shared.open(url); onClose() }) {
+                                        Text("Open")
+                                            .font(.system(size: 10, weight: .black))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.blue)
+                                            .cornerRadius(5)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        } else if let urlString = meetingUrl, let _ = URL(string: urlString) {
                             Button(action: {
                                 if let url = URL(string: urlString) {
                                     NSWorkspace.shared.open(url)
@@ -312,7 +329,7 @@ struct BannerView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: platformIcon)
                                         .font(.system(size: 10, weight: .bold))
-                                    Text(platform?.lowercased().contains("todoist") == true ? "View" : "Join")
+                                    Text("Join")
                                         .font(.system(size: 10.5, weight: .black))
                                 }
                                 .fixedSize(horizontal: true, vertical: false)
@@ -328,7 +345,6 @@ struct BannerView: View {
                             Image(systemName: platformIcon)
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(headerColor)
-                            
                             Text(plat)
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(textColor)
@@ -371,6 +387,20 @@ struct BannerView: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+struct TodoistLogo: View {
+    let size: CGFloat
+
+    var body: some View {
+        if let path = Bundle.main.path(forResource: "todoist", ofType: "png"),
+           let img = NSImage(contentsOfFile: path) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        }
     }
 }
 

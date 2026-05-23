@@ -4,6 +4,8 @@ import SwiftUI
 class SettingsManager {
     private let defaults = UserDefaults.standard
     private let enabledThresholdsKey = "enabled_thresholds"
+    private let calendarThresholdsKey = "calendar_thresholds"
+    private let todoistThresholdsKey = "todoist_thresholds"
     private let bannerSizeKey = "banner_size"
     private let flightSpeedKey = "flight_speed"
     private let cardBackgroundKey = "card_background"
@@ -19,6 +21,14 @@ class SettingsManager {
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
             defaults.set([10, 5], forKey: enabledThresholdsKey)
+        }
+        // Migrate legacy shared thresholds into per-source keys on first run
+        let legacy = defaults.array(forKey: enabledThresholdsKey) as? [Int] ?? [10, 5]
+        if defaults.object(forKey: calendarThresholdsKey) == nil {
+            defaults.set(legacy, forKey: calendarThresholdsKey)
+        }
+        if defaults.object(forKey: todoistThresholdsKey) == nil {
+            defaults.set(legacy, forKey: todoistThresholdsKey)
         }
         if defaults.object(forKey: bannerSizeKey) == nil {
             defaults.set("medium", forKey: bannerSizeKey)
@@ -80,21 +90,36 @@ class SettingsManager {
     func enabledThresholds() -> [Int] {
         return defaults.array(forKey: enabledThresholdsKey) as? [Int] ?? [10, 5]
     }
-    
-    func isThresholdEnabled(_ threshold: Int) -> Bool {
-        return enabledThresholds().contains(threshold)
+
+    func calendarThresholds() -> [Int] {
+        return defaults.array(forKey: calendarThresholdsKey) as? [Int] ?? [10, 5]
     }
-    
+
+    func setCalendarThresholds(_ thresholds: [Int]) {
+        defaults.set(thresholds, forKey: calendarThresholdsKey)
+    }
+
+    func todoistThresholds() -> [Int] {
+        return defaults.array(forKey: todoistThresholdsKey) as? [Int] ?? [10, 5]
+    }
+
+    func setTodoistThresholds(_ thresholds: [Int]) {
+        defaults.set(thresholds, forKey: todoistThresholdsKey)
+    }
+
+    // Legacy — used by menu bar; reads calendar thresholds
+    func isThresholdEnabled(_ threshold: Int) -> Bool {
+        return calendarThresholds().contains(threshold)
+    }
+
     func setThreshold(_ threshold: Int, enabled: Bool) {
-        var thresholds = enabledThresholds()
+        var thresholds = calendarThresholds()
         if enabled {
-            if !thresholds.contains(threshold) {
-                thresholds.append(threshold)
-            }
+            if !thresholds.contains(threshold) { thresholds.append(threshold) }
         } else {
             thresholds.removeAll { $0 == threshold }
         }
-        defaults.set(thresholds, forKey: enabledThresholdsKey)
+        setCalendarThresholds(thresholds)
     }
     
     func bannerSize() -> String {

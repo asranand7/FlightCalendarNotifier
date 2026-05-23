@@ -36,6 +36,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsManager: settingsManager,
             onTestFlight: { [weak self] in
                 self?.testAnimation()
+            },
+            onSyncTodoist: { [weak self] completion in
+                self?.fetchTodoistTasks(completion: completion)
             }
         ))
         window.center()
@@ -203,7 +206,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func checkCalendarForUpcomingMeetings() {
         let now = Date()
-        let enabledThresholds = self.settingsManager.enabledThresholds()
+        let calendarThresholds = self.settingsManager.calendarThresholds()
+        let todoistThresholds = self.settingsManager.todoistThresholds()
         
         // 1. Process Calendar Events (if enabled)
         if settingsManager.isCalendarEnabled() {
@@ -240,8 +244,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         let diffInMinutes = Int(round(diffInSeconds / 60.0))
                         print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(Int(diffInSeconds))s)")
                         
-                        for threshold in enabledThresholds {
-                            // Fire if within 45 seconds of the threshold — robust against poll timing gaps
+                        for threshold in calendarThresholds {
                             let thresholdSeconds = Double(threshold) * 60.0
                             let withinWindow = diffInSeconds > 0 && abs(diffInSeconds - thresholdSeconds) <= 45
                             if withinWindow {
@@ -287,16 +290,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             
             for task in cachedTodoistTasks {
-                guard let datetimeString = task.due?.datetime,
-                      let dueDate = formatter.date(from: datetimeString) else { continue }
+                guard let due = task.due, due.isDatetime,
+                      let dueDate = formatter.date(from: due.date) else { continue }
                 
                 let diffInSeconds = dueDate.timeIntervalSince(now)
                 
                 let eventId = "todoist_\(task.id)"
                 
-                for threshold in enabledThresholds {
+                for threshold in todoistThresholds {
                     let thresholdSeconds = Double(threshold) * 60.0
-                    // Tight, robust window matched to timer interval
                     let withinWindow = diffInSeconds <= thresholdSeconds && diffInSeconds > (thresholdSeconds - 15.0)
                     
                     if withinWindow {
@@ -370,17 +372,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fetchTodoistTasks()
     }
     
-    func fetchTodoistTasks() {
+    func fetchTodoistTasks(completion: ((Int?, Error?) -> Void)? = nil) {
         let token = settingsManager.todoistToken()
-        guard !token.isEmpty && settingsManager.isTodoistEnabled() else { return }
+        guard !token.isEmpty && settingsManager.isTodoistEnabled() else {
+            completion?(nil, nil)
+            return
+        }
         print("📥 Fetching Todoist tasks for cache...")
         todoistManager.fetchTasks(token: token) { [weak self] tasks, error in
             guard let self = self else { return }
             if let error = error {
                 print("⚠️ Todoist fetch failed: \(error.localizedDescription)")
+                DispatchQueue.main.async { completion?(nil, error) }
             } else if let tasks = tasks {
                 print("✅ Todoist cache updated: found \(tasks.count) timed tasks")
                 self.cachedTodoistTasks = tasks
+                DispatchQueue.main.async { completion?(tasks.count, nil) }
             }
         }
     }

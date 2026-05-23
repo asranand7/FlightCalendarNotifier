@@ -4,6 +4,7 @@ struct SetupView: View {
     let calendarManager: CalendarManager
     let settingsManager: SettingsManager
     let onTestFlight: () -> Void
+    let onSyncTodoist: (@escaping (Int?, Error?) -> Void) -> Void
     
     @State private var calendarStatus: String = "Checking..."
     @State private var isAuthorized: Bool = false
@@ -20,9 +21,15 @@ struct SetupView: View {
     
     @State private var isCalendarEnabled: Bool = false
     @State private var isTodoistEnabled: Bool = false
+    @State private var calendarThresholds: Set<Int> = []
+    @State private var todoistThresholds: Set<Int> = []
     @State private var todoistToken: String = ""
     @State private var todoistStatus: String = "Disconnected"
     @State private var isVerifyingTodoist: Bool = false
+    @State private var isSyncingTodoist: Bool = false
+    @State private var lastSyncResult: String = ""
+    @State private var verifyManager: TodoistManager? = nil
+    @State private var isEditingToken: Bool = false
     
     var body: some View {
         VStack(spacing: 14) {
@@ -85,9 +92,15 @@ struct SetupView: View {
                         }
                         NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
                     }
-                
+
+                if isCalendarEnabled {
+                    thresholdPicker(label: "Calendar alerts:", selected: $calendarThresholds) { newVal in
+                        settingsManager.setCalendarThresholds(Array(newVal))
+                    }
+                }
+
                 Divider().background(Color.white.opacity(0.05))
-                
+
                 Toggle("Enable Todoist Reminders", isOn: $isTodoistEnabled)
                     .font(.system(size: 11.5))
                     .foregroundColor(.white.opacity(0.75))
@@ -104,49 +117,127 @@ struct SetupView: View {
                     }
                 
                 if isTodoistEnabled {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            SecurePasteField(placeholder: "API Token", text: $todoistToken)
-                                .padding(5)
-                                .background(Color.black.opacity(0.3))
-                                .cornerRadius(5)
-                                .frame(height: 24)
-                            
-                            if isVerifyingTodoist {
-                                ProgressView().scaleEffect(0.5).frame(width: 20, height: 20)
-                            } else {
-                                Button("Verify") {
-                                    verifyTodoistToken()
+                    VStack(alignment: .leading, spacing: 8) {
+                        if todoistStatus == "Connected" && !isEditingToken {
+                            // Saved token state — no need to re-enter
+                            HStack {
+                                Text("●●●●●●●●●●●●●●●●")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.4))
+                                Spacer()
+                                Button("Change") {
+                                    isEditingToken = true
+                                    todoistToken = ""
                                 }
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.6))
                                 .buttonStyle(.plain)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.amber)
-                                .foregroundColor(.black)
-                                .cornerRadius(4)
                             }
-                        }
-                        
-                        HStack {
-                            Text("Status: ")
-                                .font(.system(size: 10))
-                                .foregroundColor(.white.opacity(0.5))
-                            Text(todoistStatus)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(todoistStatus == "Connected" ? .green : (todoistStatus == "Disconnected" || todoistStatus == "Token Required" ? .white.opacity(0.6) : .red))
-                            
-                            if !todoistToken.isEmpty && todoistStatus == "Connected" {
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.2))
+                            .cornerRadius(6)
+
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.system(size: 10))
+                                Text("Connected")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.green)
                                 Spacer()
                                 Button("Disconnect") {
                                     todoistToken = ""
                                     settingsManager.setTodoistToken("")
                                     todoistStatus = "Token Required"
+                                    lastSyncResult = ""
+                                    isEditingToken = false
                                     NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
                                 }
                                 .font(.system(size: 9))
                                 .foregroundColor(.red.opacity(0.8))
                                 .buttonStyle(.plain)
+                            }
+
+                            // Sync row
+                            HStack(spacing: 8) {
+                                if isSyncingTodoist {
+                                    ProgressView().scaleEffect(0.5).frame(width: 16, height: 16)
+                                    Text("Syncing...")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.white.opacity(0.5))
+                                } else {
+                                    Button(action: syncTodoistTasks) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.clockwise")
+                                                .font(.system(size: 9, weight: .bold))
+                                            Text("Sync Now")
+                                                .font(.system(size: 10, weight: .semibold))
+                                        }
+                                        .foregroundColor(.black)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Color.amber)
+                                        .cornerRadius(5)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if !lastSyncResult.isEmpty {
+                                        Text(lastSyncResult)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.white.opacity(0.5))
+                                    }
+                                }
+                            }
+
+                            thresholdPicker(label: "Todoist alerts:", selected: $todoistThresholds) { newVal in
+                                settingsManager.setTodoistThresholds(Array(newVal))
+                            }
+
+                        } else {
+                            // Input mode — enter / change token
+                            HStack {
+                                SecurePasteField(placeholder: "Paste API token", text: $todoistToken)
+                                    .padding(5)
+                                    .background(Color.black.opacity(0.3))
+                                    .cornerRadius(5)
+                                    .frame(height: 24)
+
+                                if isVerifyingTodoist {
+                                    ProgressView().scaleEffect(0.5).frame(width: 20, height: 20)
+                                } else {
+                                    Button("Verify") {
+                                        verifyTodoistToken()
+                                    }
+                                    .font(.system(size: 10, weight: .bold))
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.amber)
+                                    .foregroundColor(.black)
+                                    .cornerRadius(4)
+                                }
+                            }
+
+                            HStack {
+                                Text("Status: ")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text(todoistStatus)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(todoistStatus.hasPrefix("Error") || todoistStatus.hasPrefix("Invalid") || todoistStatus.hasPrefix("Network") ? .red : .white.opacity(0.6))
+
+                                if isEditingToken {
+                                    Spacer()
+                                    Button("Cancel") {
+                                        todoistToken = settingsManager.todoistToken()
+                                        todoistStatus = "Connected"
+                                        isEditingToken = false
+                                    }
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.white.opacity(0.5))
+                                    .buttonStyle(.plain)
+                                }
                             }
                         }
                     }
@@ -454,8 +545,12 @@ struct SetupView: View {
             
             isCalendarEnabled = settingsManager.isCalendarEnabled()
             isTodoistEnabled = settingsManager.isTodoistEnabled()
+            calendarThresholds = Set(settingsManager.calendarThresholds())
+            todoistThresholds = Set(settingsManager.todoistThresholds())
             todoistToken = settingsManager.todoistToken()
-            todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
+            let hasToken = !todoistToken.isEmpty
+            todoistStatus = hasToken ? "Connected" : "Token Required"
+            isEditingToken = !hasToken
             
             if isCalendarEnabled {
                 checkPermission()
@@ -465,6 +560,36 @@ struct SetupView: View {
         }
     }
     
+    @ViewBuilder
+    func thresholdPicker(label: String, selected: Binding<Set<Int>>, onChange: @escaping (Set<Int>) -> Void) -> some View {
+        let all = [1, 2, 5, 10, 15, 30]
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 5) {
+                ForEach(all, id: \.self) { mins in
+                    let isOn = selected.wrappedValue.contains(mins)
+                    Button(action: {
+                        var updated = selected.wrappedValue
+                        if isOn { updated.remove(mins) } else { updated.insert(mins) }
+                        selected.wrappedValue = updated
+                        onChange(updated)
+                    }) {
+                        Text("\(mins)m")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(isOn ? .black : .white.opacity(0.5))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(isOn ? Color.amber : Color.white.opacity(0.06))
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     func themePreviewImage(_ name: String, fallback: String) -> some View {
         if let path = Bundle.main.path(forResource: name, ofType: "png"),
@@ -518,6 +643,22 @@ struct SetupView: View {
         }
     }
     
+    func syncTodoistTasks() {
+        isSyncingTodoist = true
+        lastSyncResult = ""
+        onSyncTodoist { count, error in
+            isSyncingTodoist = false
+            if let error = error {
+                lastSyncResult = "Sync failed: \(error.localizedDescription)"
+            } else if let count = count {
+                let now = Date()
+                let formatter = DateFormatter()
+                formatter.dateFormat = "h:mm a"
+                lastSyncResult = "\(count) task\(count == 1 ? "" : "s") at \(formatter.string(from: now))"
+            }
+        }
+    }
+
     func verifyTodoistToken() {
         guard !todoistToken.isEmpty else {
             todoistStatus = "Token Required"
@@ -525,15 +666,25 @@ struct SetupView: View {
         }
         isVerifyingTodoist = true
         todoistStatus = "Verifying..."
-        
-        let tManager = TodoistManager()
-        tManager.fetchTasks(token: todoistToken) { tasks, error in
+
+        let manager = TodoistManager()
+        verifyManager = manager  // retain until callback fires
+        manager.fetchTasks(token: todoistToken) { tasks, error in
             DispatchQueue.main.async {
                 isVerifyingTodoist = false
-                if error != nil {
-                    todoistStatus = "Invalid Token / Error"
+                verifyManager = nil
+                if let error = error {
+                    let code = (error as NSError).code
+                    if code == 401 || code == 403 {
+                        todoistStatus = "Invalid token"
+                    } else if code == NSURLErrorTimedOut || code == NSURLErrorNotConnectedToInternet {
+                        todoistStatus = "Network error — check connection"
+                    } else {
+                        todoistStatus = "Error \(code): \((error as NSError).localizedDescription)"
+                    }
                 } else {
                     todoistStatus = "Connected"
+                    isEditingToken = false
                     settingsManager.setTodoistToken(todoistToken)
                     NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
                 }
