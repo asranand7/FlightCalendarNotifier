@@ -42,8 +42,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = NSHostingView(rootView: SetupView(
             calendarManager: calendarManager,
             settingsManager: settingsManager,
-            onTestFlight: { [weak self] in
-                self?.testAnimation()
+            onTestFlight: { [weak self] platform in
+                self?.testAnimationWith(platform: platform)
             },
             onSyncTodoist: { [weak self] completion in
                 self?.fetchTodoistTasks(completion: completion)
@@ -162,13 +162,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func testAnimation() {
+        testAnimationWith(platform: nil)
+    }
+
+    func testAnimationWith(platform: String?) {
+        let isTodoist = platform == "Todoist"
         showFlightAnimation(
-            meetingTitle: "Project Review Meeting",
+            meetingTitle: isTodoist ? "Finish project proposal" : "Project Review Meeting",
             minutesRemaining: 10,
             startDate: Date(),
-            endDate: Date().addingTimeInterval(30 * 60),
-            platform: "Google Meet",
-            meetingUrl: "https://meet.google.com/abc-defg-hij"
+            endDate: isTodoist ? nil : Date().addingTimeInterval(30 * 60),
+            platform: isTodoist ? "Todoist" : (platform ?? "Google Meet"),
+            meetingUrl: isTodoist ? "https://todoist.com/app/task/12345" : "https://meet.google.com/abc-defg-hij"
         )
     }
     

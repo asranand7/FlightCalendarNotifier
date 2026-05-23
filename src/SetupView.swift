@@ -22,7 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 struct SetupView: View {
     let calendarManager: CalendarManager
     let settingsManager: SettingsManager
-    let onTestFlight: () -> Void
+    let onTestFlight: (String?) -> Void
     let onSyncTodoist: (@escaping (Int?, Error?) -> Void) -> Void
 
     @State private var selection: SettingsSection? = .reminders
@@ -83,7 +83,7 @@ struct SetupView: View {
                 .navigationTitle(selection?.rawValue ?? "Flyby")
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button(action: onTestFlight) {
+                        Button { onTestFlight(nil) } label: {
                             Label("Test Animation", systemImage: "play.fill")
                         }
                     }
@@ -147,6 +147,20 @@ struct SetupView: View {
                             Button("Grant…") { requestPermission() }
                                 .buttonStyle(.borderedProminent)
                         }
+                    }
+                    Divider().opacity(0.4)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Preview")
+                            Text("See how a Calendar meeting banner looks")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { onTestFlight("Google Meet") } label: {
+                            Label("Test Banner", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
             }
@@ -257,6 +271,22 @@ struct SetupView: View {
                 }
             }
 
+            Divider().opacity(0.4)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Preview")
+                    Text("See how a Todoist task banner looks")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { onTestFlight("Todoist") } label: {
+                    Label("Test Banner", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            Divider().opacity(0.4)
             HStack {
                 Spacer()
                 Button("Disconnect", role: .destructive) {
