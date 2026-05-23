@@ -167,9 +167,12 @@ struct FlightAnimationView: View {
         if let img = img {
             Image(nsImage: img)
                 .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 52, height: 52)
-                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 58, height: 58)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
+                .rotationEffect(.degrees(pitchAngle * 0.4))
                 .offset(y: bobOffset)
         } else {
             Text("🖼️").font(.system(size: 30)).offset(y: bobOffset)
@@ -193,8 +196,9 @@ struct FlightAnimationView: View {
                 bobOffset = 6.0
             }
         case "custom_image":
-            withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                bobOffset = 4.0
+            withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                bobOffset = 5.0
+                pitchAngle = 6.0
             }
         default:
             if animationThemeName.hasPrefix("emoji:") {
