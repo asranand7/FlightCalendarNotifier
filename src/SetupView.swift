@@ -3,6 +3,7 @@ import ServiceManagement
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
+    case integrations = "Integrations"
     case reminders = "Reminders"
     case appearance = "Appearance"
 
@@ -11,6 +12,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
+        case .integrations: return "puzzlepiece.extension"
         case .reminders: return "bell.badge"
         case .appearance: return "paintbrush.pointed"
         }
@@ -97,6 +99,7 @@ struct SetupView: View {
     private var detailPane: some View {
         switch selection ?? .general {
         case .general: generalPane
+        case .integrations: integrationsPane
         case .reminders: remindersPane
         case .appearance: appearancePane
         }
@@ -109,63 +112,57 @@ struct SetupView: View {
                     .onChange(of: launchAtLogin) { setLaunchAtLogin(launchAtLogin) }
             }
 
-            glassCard(title: "Calendar Access", footer: "Flyby reads upcoming events to fly a reminder across your screen before each meeting.") {
-                HStack {
-                    Text("Status")
-                    Spacer()
-                    Label(isAuthorized ? "Granted" : "Not Granted",
-                          systemImage: isAuthorized ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(isAuthorized ? .green : .orange)
-                        .fontWeight(.medium)
-                }
-                if !isAuthorized {
-                    Button("Grant Calendar Access…") { requestPermission() }
-                        .buttonStyle(.borderedProminent)
-                }
-            }
-
             glassCard(title: "About") {
                 infoRow("Application", "Flyby")
                 infoRow("Tagline", "Animated Meeting Reminders")
-                infoRow("Version", "0.0.2")
+                infoRow("Version", "0.0.4")
             }
         }
     }
 
-    private var remindersPane: some View {
+    private var integrationsPane: some View {
         paneScroll {
-            glassCard(title: "Calendar") {
-                Toggle("Enable Calendar Reminders", isOn: $isCalendarEnabled)
-                    .onChange(of: isCalendarEnabled) {
-                        settingsManager.setCalendarEnabled(isCalendarEnabled)
-                        if isCalendarEnabled {
-                            requestPermission()
-                        } else {
-                            calendarStatus = "Disabled"
-                        }
-                        NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+            // Calendar integration
+            glassCard(footer: "Flyby reads upcoming events from macOS Calendar to fly a reminder across your screen before each meeting.") {
+                integrationHeader(icon: "calendar", title: "Calendar", subtitle: "macOS Calendar (iCloud, Google, Exchange)", isOn: $isCalendarEnabled) {
+                    settingsManager.setCalendarEnabled(isCalendarEnabled)
+                    if isCalendarEnabled {
+                        requestPermission()
+                    } else {
+                        calendarStatus = "Disabled"
                     }
+                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                }
 
                 if isCalendarEnabled {
                     Divider().opacity(0.4)
-                    thresholdRow(label: "Alert intervals", selected: $calendarThresholds) { updated in
-                        settingsManager.setCalendarThresholds(Array(updated))
+                    HStack {
+                        Text("Permission")
+                        Spacer()
+                        Label(isAuthorized ? "Granted" : "Not Granted",
+                              systemImage: isAuthorized ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(isAuthorized ? .green : .orange)
+                            .fontWeight(.medium)
+                        if !isAuthorized {
+                            Button("Grant…") { requestPermission() }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
             }
 
-            glassCard(title: "Todoist", footer: "Create your token at todoist.com → Settings → Integrations → Developer.") {
-                Toggle("Enable Todoist Reminders", isOn: $isTodoistEnabled)
-                    .onChange(of: isTodoistEnabled) {
-                        settingsManager.setTodoistEnabled(isTodoistEnabled)
-                        if !isTodoistEnabled {
-                            todoistStatus = "Disconnected"
-                        } else {
-                            todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
-                            isEditingToken = todoistToken.isEmpty
-                        }
-                        NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+            // Todoist integration
+            glassCard(footer: "Create your API token at todoist.com → Settings → Integrations → Developer.") {
+                integrationHeader(icon: "todoist", title: "Todoist", subtitle: "Timed tasks via the Todoist API", isOn: $isTodoistEnabled) {
+                    settingsManager.setTodoistEnabled(isTodoistEnabled)
+                    if !isTodoistEnabled {
+                        todoistStatus = "Disconnected"
+                    } else {
+                        todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
+                        isEditingToken = todoistToken.isEmpty
                     }
+                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                }
 
                 if isTodoistEnabled {
                     todoistContent
@@ -176,6 +173,45 @@ struct SetupView: View {
         .animation(.smooth(duration: 0.3), value: isTodoistEnabled)
         .animation(.smooth(duration: 0.3), value: isEditingToken)
         .animation(.smooth(duration: 0.3), value: todoistStatus)
+        .animation(.smooth(duration: 0.3), value: isAuthorized)
+    }
+
+    private var remindersPane: some View {
+        paneScroll {
+            if !isCalendarEnabled && !isTodoistEnabled {
+                glassCard {
+                    HStack(spacing: 10) {
+                        Image(systemName: "puzzlepiece.extension")
+                            .foregroundStyle(.secondary)
+                        Text("Enable a source in **Integrations** to choose when you’re reminded.")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+
+            if isCalendarEnabled {
+                glassCard {
+                    integrationLabel(icon: "calendar", title: "Calendar")
+                    Divider().opacity(0.4)
+                    thresholdRow(label: "Alert intervals", selected: $calendarThresholds) { updated in
+                        settingsManager.setCalendarThresholds(Array(updated))
+                    }
+                }
+            }
+
+            if isTodoistEnabled {
+                glassCard {
+                    integrationLabel(icon: "todoist", title: "Todoist")
+                    Divider().opacity(0.4)
+                    thresholdRow(label: "Alert intervals", selected: $todoistThresholds) { updated in
+                        settingsManager.setTodoistThresholds(Array(updated))
+                    }
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.3), value: isCalendarEnabled)
+        .animation(.smooth(duration: 0.3), value: isTodoistEnabled)
     }
 
     @ViewBuilder
@@ -219,10 +255,6 @@ struct SetupView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-            }
-
-            thresholdRow(label: "Alert intervals", selected: $todoistThresholds) { updated in
-                settingsManager.setTodoistThresholds(Array(updated))
             }
 
             HStack {
@@ -438,6 +470,46 @@ struct SetupView: View {
             Text(label)
             Spacer()
             Text(value).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func integrationIcon(_ name: String, size: CGFloat) -> some View {
+        if let path = Bundle.main.path(forResource: name, ofType: "png"),
+           let img = NSImage(contentsOfFile: path) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: "app.dashed")
+                .font(.system(size: size * 0.7))
+                .foregroundStyle(.secondary)
+                .frame(width: size, height: size)
+        }
+    }
+
+    @ViewBuilder
+    private func integrationHeader(icon: String, title: String, subtitle: String, isOn: Binding<Bool>, onChange: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            integrationIcon(icon, size: 36)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .onChange(of: isOn.wrappedValue) { onChange() }
+        }
+    }
+
+    @ViewBuilder
+    private func integrationLabel(icon: String, title: String) -> some View {
+        HStack(spacing: 10) {
+            integrationIcon(icon, size: 22)
+            Text(title).font(.system(size: 13, weight: .semibold))
+            Spacer(minLength: 0)
         }
     }
 
