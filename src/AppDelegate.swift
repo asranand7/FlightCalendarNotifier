@@ -399,9 +399,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func startTodoistTimer() {
-        print("⏱️ Starting Todoist caching timer (interval: 5m)")
+        let interval = TimeInterval(settingsManager.todoistSyncInterval())
+        print("⏱️ Starting Todoist caching timer (interval: \(Int(interval))s)")
         todoistTimer?.invalidate()
-        let t = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
+        let t = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.fetchTodoistTasks()
         }
         RunLoop.current.add(t, forMode: .common)

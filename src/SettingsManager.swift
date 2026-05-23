@@ -20,6 +20,7 @@ class SettingsManager {
     private let todoistTokenKey = "todoist_token"
     private let customImagePathKey = "custom_image_path"
     private let lastTodoistSyncKey = "last_todoist_sync"
+    private let todoistSyncIntervalKey = "todoist_sync_interval"
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -217,6 +218,15 @@ class SettingsManager {
 
     func customImagePath() -> String? {
         return defaults.string(forKey: customImagePathKey)
+    }
+
+    func todoistSyncInterval() -> Int {
+        let v = defaults.integer(forKey: todoistSyncIntervalKey)
+        return v > 0 ? v : 300
+    }
+
+    func setTodoistSyncInterval(_ seconds: Int) {
+        defaults.set(seconds, forKey: todoistSyncIntervalKey)
     }
 
     func lastTodoistSync() -> Date? {

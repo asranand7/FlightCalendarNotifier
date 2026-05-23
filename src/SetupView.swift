@@ -53,6 +53,16 @@ struct SetupView: View {
     @State private var isSyncingTodoist: Bool = false
     @State private var lastSyncResult: String = ""
     @State private var lastAutoSync: Date? = nil
+    @State private var todoistSyncInterval: Int = 300
+
+    private let syncIntervalOptions: [(label: String, seconds: Int)] = [
+        ("1 min",  60),
+        ("2 min",  120),
+        ("5 min",  300),
+        ("10 min", 600),
+        ("15 min", 900),
+        ("30 min", 1800),
+    ]
     @State private var verifyManager: TodoistManager? = nil
     @State private var isEditingToken: Bool = false
 
@@ -259,6 +269,22 @@ struct SetupView: View {
                 Label("Connected", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .fontWeight(.medium)
+            }
+
+            HStack {
+                Text("Sync Interval")
+                Spacer()
+                Picker("", selection: $todoistSyncInterval) {
+                    ForEach(syncIntervalOptions, id: \.seconds) { option in
+                        Text(option.label).tag(option.seconds)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 100)
+                .onChange(of: todoistSyncInterval) {
+                    settingsManager.setTodoistSyncInterval(todoistSyncInterval)
+                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                }
             }
 
             HStack {
@@ -752,6 +778,7 @@ struct SetupView: View {
         customImagePath = settingsManager.customImagePath()
 
         lastAutoSync = settingsManager.lastTodoistSync()
+        todoistSyncInterval = settingsManager.todoistSyncInterval()
         isCalendarEnabled = settingsManager.isCalendarEnabled()
         isTodoistEnabled = settingsManager.isTodoistEnabled()
         calendarThresholds = Set(settingsManager.calendarThresholds())
