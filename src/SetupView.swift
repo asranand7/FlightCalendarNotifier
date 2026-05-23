@@ -1,11 +1,29 @@
 import SwiftUI
 
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case general = "General"
+    case reminders = "Reminders"
+    case appearance = "Appearance"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "gearshape"
+        case .reminders: return "bell.badge"
+        case .appearance: return "paintbrush.pointed"
+        }
+    }
+}
+
 struct SetupView: View {
     let calendarManager: CalendarManager
     let settingsManager: SettingsManager
     let onTestFlight: () -> Void
     let onSyncTodoist: (@escaping (Int?, Error?) -> Void) -> Void
-    
+
+    @State private var selection: SettingsSection? = .reminders
+
     @State private var calendarStatus: String = "Checking..."
     @State private var isAuthorized: Bool = false
     @State private var bannerWidth: Double = 230.0
@@ -18,7 +36,7 @@ struct SetupView: View {
     @State private var selectedPosition: String = "top"
     @State private var customBgColor: Color = Color(hex: "#20222C")
     @State private var customTextColor: Color = Color(hex: "#FFFFFF")
-    
+
     @State private var isCalendarEnabled: Bool = false
     @State private var isTodoistEnabled: Bool = false
     @State private var calendarThresholds: Set<Int> = []
@@ -30,59 +48,87 @@ struct SetupView: View {
     @State private var lastSyncResult: String = ""
     @State private var verifyManager: TodoistManager? = nil
     @State private var isEditingToken: Bool = false
-    
+
+    private let thresholdOptions = [1, 2, 5, 10, 15, 30]
+    private let bgPresets: [(String, String)] = [
+        ("#20222C", "Dark"), ("#F8F8F8", "Light"), ("#FFC0CB", "Pink"),
+        ("#FFB300", "Amber"), ("#0F1E4B", "Blue"), ("#2ECC71", "Green")
+    ]
+    private let textPresets: [(String, String)] = [
+        ("#FFFFFF", "White"), ("#000000", "Black"), ("#FFEB3B", "Yellow"),
+        ("#FFB300", "Amber"), ("#FFC0CB", "Pink")
+    ]
+
     var body: some View {
-        VStack(spacing: 14) {
-            // Header
-            VStack(spacing: 3) {
-                Text("✨ Flyby")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                Text("Animated Meeting Reminders")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            .padding(.top, 6)
-            
-            // Permissions Panel
-            VStack(alignment: .leading, spacing: 8) {
-                Text("System Permissions")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
-                
-                HStack {
-                    Text("Calendar Access:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    Text(calendarStatus)
-                        .font(.system(size: 11.5, weight: .bold))
-                        .foregroundColor(isAuthorized ? .green : .orange)
-                        .onTapGesture {
-                            if !isAuthorized {
-                                requestPermission()
-                            }
-                        }
+        NavigationSplitView {
+            List(selection: $selection) {
+                Section("Flyby") {
+                    ForEach(SettingsSection.allCases) { section in
+                        Label(section.rawValue, systemImage: section.icon)
+                            .tag(section)
+                    }
                 }
             }
-            .padding(10)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            
-            // Reminder Sources Panel
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Reminder Sources")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
-                
+            .navigationSplitViewColumnWidth(min: 180, ideal: 196, max: 230)
+        } detail: {
+            detailPane
+                .background(
+                    VisualEffectBackground(material: .underWindowBackground, blendingMode: .behindWindow)
+                        .ignoresSafeArea()
+                )
+                .navigationTitle(selection?.rawValue ?? "Flyby")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: onTestFlight) {
+                            Label("Test Animation", systemImage: "play.fill")
+                        }
+                    }
+                }
+        }
+        .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
+        .onAppear(perform: loadSettings)
+    }
+
+    // MARK: - Detail panes
+
+    @ViewBuilder
+    private var detailPane: some View {
+        switch selection ?? .general {
+        case .general: generalPane
+        case .reminders: remindersPane
+        case .appearance: appearancePane
+        }
+    }
+
+    private var generalPane: some View {
+        paneScroll {
+            glassCard(title: "Calendar Access", footer: "Flyby reads upcoming events to fly a reminder across your screen before each meeting.") {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    Label(isAuthorized ? "Granted" : "Not Granted",
+                          systemImage: isAuthorized ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(isAuthorized ? .green : .orange)
+                        .fontWeight(.medium)
+                }
+                if !isAuthorized {
+                    Button("Grant Calendar Access…") { requestPermission() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+
+            glassCard(title: "About") {
+                infoRow("Application", "Flyby")
+                infoRow("Tagline", "Animated Meeting Reminders")
+                infoRow("Version", "0.0.2")
+            }
+        }
+    }
+
+    private var remindersPane: some View {
+        paneScroll {
+            glassCard(title: "Calendar") {
                 Toggle("Enable Calendar Reminders", isOn: $isCalendarEnabled)
-                    .font(.system(size: 11.5))
-                    .foregroundColor(.white.opacity(0.75))
-                    .toggleStyle(SwitchToggleStyle(tint: .amber))
                     .onChange(of: isCalendarEnabled) {
                         settingsManager.setCalendarEnabled(isCalendarEnabled)
                         if isCalendarEnabled {
@@ -94,504 +140,373 @@ struct SetupView: View {
                     }
 
                 if isCalendarEnabled {
-                    thresholdPicker(label: "Calendar alerts:", selected: $calendarThresholds) { newVal in
-                        settingsManager.setCalendarThresholds(Array(newVal))
+                    Divider().opacity(0.4)
+                    thresholdRow(label: "Alert intervals", selected: $calendarThresholds) { updated in
+                        settingsManager.setCalendarThresholds(Array(updated))
                     }
                 }
+            }
 
-                Divider().background(Color.white.opacity(0.05))
-
+            glassCard(title: "Todoist", footer: "Create your token at todoist.com → Settings → Integrations → Developer.") {
                 Toggle("Enable Todoist Reminders", isOn: $isTodoistEnabled)
-                    .font(.system(size: 11.5))
-                    .foregroundColor(.white.opacity(0.75))
-                    .toggleStyle(SwitchToggleStyle(tint: .amber))
                     .onChange(of: isTodoistEnabled) {
                         settingsManager.setTodoistEnabled(isTodoistEnabled)
                         if !isTodoistEnabled {
                             todoistStatus = "Disconnected"
-                            NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
                         } else {
                             todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
-                            NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                            isEditingToken = todoistToken.isEmpty
                         }
+                        NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
                     }
-                
+
                 if isTodoistEnabled {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if todoistStatus == "Connected" && !isEditingToken {
-                            // Saved token state — no need to re-enter
-                            HStack {
-                                Text("●●●●●●●●●●●●●●●●")
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.4))
-                                Spacer()
-                                Button("Change") {
-                                    isEditingToken = true
-                                    todoistToken = ""
-                                }
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.2))
-                            .cornerRadius(6)
-
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 10))
-                                Text("Connected")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.green)
-                                Spacer()
-                                Button("Disconnect") {
-                                    todoistToken = ""
-                                    settingsManager.setTodoistToken("")
-                                    todoistStatus = "Token Required"
-                                    lastSyncResult = ""
-                                    isEditingToken = false
-                                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
-                                }
-                                .font(.system(size: 9))
-                                .foregroundColor(.red.opacity(0.8))
-                                .buttonStyle(.plain)
-                            }
-
-                            // Sync row
-                            HStack(spacing: 8) {
-                                if isSyncingTodoist {
-                                    ProgressView().scaleEffect(0.5).frame(width: 16, height: 16)
-                                    Text("Syncing...")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.white.opacity(0.5))
-                                } else {
-                                    Button(action: syncTodoistTasks) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "arrow.clockwise")
-                                                .font(.system(size: 9, weight: .bold))
-                                            Text("Sync Now")
-                                                .font(.system(size: 10, weight: .semibold))
-                                        }
-                                        .foregroundColor(.black)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(Color.amber)
-                                        .cornerRadius(5)
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    if !lastSyncResult.isEmpty {
-                                        Text(lastSyncResult)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.white.opacity(0.5))
-                                    }
-                                }
-                            }
-
-                            thresholdPicker(label: "Todoist alerts:", selected: $todoistThresholds) { newVal in
-                                settingsManager.setTodoistThresholds(Array(newVal))
-                            }
-
-                        } else {
-                            // Input mode — enter / change token
-                            HStack {
-                                SecurePasteField(placeholder: "Paste API token", text: $todoistToken)
-                                    .padding(5)
-                                    .background(Color.black.opacity(0.3))
-                                    .cornerRadius(5)
-                                    .frame(height: 24)
-
-                                if isVerifyingTodoist {
-                                    ProgressView().scaleEffect(0.5).frame(width: 20, height: 20)
-                                } else {
-                                    Button("Verify") {
-                                        verifyTodoistToken()
-                                    }
-                                    .font(.system(size: 10, weight: .bold))
-                                    .buttonStyle(.plain)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.amber)
-                                    .foregroundColor(.black)
-                                    .cornerRadius(4)
-                                }
-                            }
-
-                            HStack {
-                                Text("Status: ")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.5))
-                                Text(todoistStatus)
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(todoistStatus.hasPrefix("Error") || todoistStatus.hasPrefix("Invalid") || todoistStatus.hasPrefix("Network") ? .red : .white.opacity(0.6))
-
-                                if isEditingToken {
-                                    Spacer()
-                                    Button("Cancel") {
-                                        todoistToken = settingsManager.todoistToken()
-                                        todoistStatus = "Connected"
-                                        isEditingToken = false
-                                    }
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 4)
+                    todoistContent
                 }
             }
-            .padding(10)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            
-            // Flight Customization Panel
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Flight Customization")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
-                
-                // Theme selector
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Animation Theme:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    // Row 1
-                    HStack(spacing: 10) {
-                        themeButton(key: "airplane", label: "Plane") {
-                            themePreviewImage("airplane", fallback: "✈️")
-                        }
-                        themeButton(key: "f1car", label: "F1 Car") {
-                            themePreviewImage("f1car", fallback: "🏎️")
-                        }
-                        themeButton(key: "motorbike", label: "Moto") {
-                            themePreviewImage("motorbike", fallback: "🏍️")
-                        }
-                        themeButton(key: "locomotive", label: "Train") {
-                            themePreviewImage("locomotive", fallback: "🚂")
-                        }
-                    }
-                    // Row 2
-                    HStack(spacing: 10) {
-                        themeButton(key: "helicopter", label: "Heli") {
-                            themePreviewImage("helicopter", fallback: "🚁")
-                        }
-                        themeButton(key: "rocket", label: "Rocket") {
-                            themePreviewImage("rocket", fallback: "🚀")
-                        }
-                        themeButton(key: "dinosaur", label: "Dino") {
-                            Text("🦕").font(.system(size: 28))
-                        }
-                        themeButton(key: "emoji:\(customEmoji)", label: "Custom") {
-                            Text("✏️").font(.system(size: 24))
-                        }
-                    }
-
-                    if selectedTheme.hasPrefix("emoji:") {
-                        HStack(spacing: 6) {
-                            TextField("Paste emoji", text: $customEmoji)
-                                .font(.system(size: 20))
-                                .frame(width: 50)
-                                .onChange(of: customEmoji) { newVal in
-                                    let trimmed = String(newVal.prefix(1))
-                                    if trimmed != newVal { customEmoji = trimmed }
-                                    let theme = "emoji:\(trimmed)"
-                                    selectedTheme = theme
-                                    settingsManager.setAnimationTheme(theme)
-                                }
-                            Text("← type any single emoji")
-                                .font(.system(size: 10))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                    }
-                }
-                       Divider().background(Color.white.opacity(0.05))
-
-                // Dimension Sliders
-                VStack(spacing: 8) {
-                    HStack {
-                        Text("Banner Width:")
-                            .font(.system(size: 11.5))
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        Text("\(Int(bannerWidth)) px")
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundColor(.white.opacity(0.9))
-                    }
-                    Slider(value: $bannerWidth, in: 160...400, step: 5)
-                        .onChange(of: bannerWidth) {
-                            settingsManager.setBannerWidth(bannerWidth)
-                        }
-                    
-                    HStack {
-                        Text("Banner Height:")
-                            .font(.system(size: 11.5))
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        Text("\(Int(bannerHeight)) px")
-                            .font(.system(size: 11.5, weight: .bold))
-                            .foregroundColor(.white.opacity(0.9))
-                    }
-                    Slider(value: $bannerHeight, in: 50...120, step: 2)
-                        .onChange(of: bannerHeight) {
-                            settingsManager.setBannerHeight(bannerHeight)
-                        }
-                }
-                
-                Divider().background(Color.white.opacity(0.05))
-                
-                // Speed selector
-                HStack {
-                    Text("Flight Speed:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    HStack(spacing: 5) {
-                        ForEach(["slow", "medium", "fast"], id: \.self) { speedName in
-                            Button(action: {
-                                selectedSpeed = speedName
-                                settingsManager.setFlightSpeed(speedName)
-                            }) {
-                                Text(speedName.capitalized)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(selectedSpeed == speedName ? .black : .white.opacity(0.7))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(selectedSpeed == speedName ? Color.amber : Color.white.opacity(0.06))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                
-                Divider().background(Color.white.opacity(0.05))
-
-                // Banner position selector
-                HStack {
-                    Text("Banner Position:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    HStack(spacing: 5) {
-                        ForEach([("top", "▲ Top"), ("middle", "● Middle"), ("bottom", "▼ Bottom")], id: \.0) { (pos, label) in
-                            Button(action: {
-                                selectedPosition = pos
-                                settingsManager.setBannerPosition(pos)
-                            }) {
-                                Text(label)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(selectedPosition == pos ? .black : .white.opacity(0.7))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(selectedPosition == pos ? Color.amber : Color.white.opacity(0.06))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                Divider().background(Color.white.opacity(0.05))
-
-                // Card Background selector (Solid options + ColorPicker)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Card Background:")
-                            .font(.system(size: 11.5))
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        ColorPicker("", selection: $customBgColor)
-                            .labelsHidden()
-                            .onChange(of: customBgColor) {
-                                if let hex = customBgColor.toHex() {
-                                    selectedBg = hex
-                                    settingsManager.setCardBackground(hex)
-                                }
-                            }
-                    }
-                    
-                    HStack(spacing: 5) {
-                        ForEach([
-                            ("#20222C", "DARK"),
-                            ("#F8F8F8", "LIGHT"),
-                            ("#FFC0CB", "PINK"),
-                            ("#FFB300", "AMBER"),
-                            ("#0F1E4B", "BLUE"),
-                            ("#2ECC71", "GREEN")
-                        ], id: \.0) { (hex, label) in
-                            Button(action: {
-                                selectedBg = hex
-                                customBgColor = Color(hex: hex)
-                                settingsManager.setCardBackground(hex)
-                            }) {
-                                Text(label)
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(selectedBg == hex ? .black : .white.opacity(0.7))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(selectedBg == hex ? Color.amber : Color.white.opacity(0.06))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                
-                Divider().background(Color.white.opacity(0.05))
-                
-                // Text Color selector (Solid options + ColorPicker)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Text Color:")
-                            .font(.system(size: 11.5))
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        ColorPicker("", selection: $customTextColor)
-                            .labelsHidden()
-                            .onChange(of: customTextColor) {
-                                if let hex = customTextColor.toHex() {
-                                    selectedText = hex
-                                    settingsManager.setTextColor(hex)
-                                }
-                            }
-                    }
-                    
-                    HStack(spacing: 5) {
-                        ForEach([
-                            ("#FFFFFF", "WHITE"),
-                            ("#000000", "BLACK"),
-                            ("#FFEB3B", "YELLOW"),
-                            ("#FFB300", "AMBER"),
-                            ("#FFC0CB", "PINK")
-                        ], id: \.0) { (hex, label) in
-                            Button(action: {
-                                selectedText = hex
-                                customTextColor = Color(hex: hex)
-                                settingsManager.setTextColor(hex)
-                            }) {
-                                Text(label)
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(selectedText == hex ? .black : .white.opacity(0.7))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(selectedText == hex ? Color.amber : Color.white.opacity(0.06))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            .padding(12)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            
-            // Test Button
-            Button(action: onTestFlight) {
-                HStack(spacing: 6) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("Test Animation")
-                        .font(.system(size: 11.5, weight: .semibold))
-                }
-                .foregroundColor(.black)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Color.amber)
-                .cornerRadius(8)
-                .shadow(color: Color.amber.opacity(0.2), radius: 5, x: 0, y: 2)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 2)
-            
-            // Help description
-            Text("Click on the 'Join' button on the banner as it flies to directly launch your Zoom/Meet link. You can also click 'X' to dismiss it instantly.")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.4))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
         }
-        .padding(14)
-        .frame(width: 400, height: 720)
-        .background(Color(red: 25/255, green: 25/255, blue: 35/255))
-        .onAppear {
-            bannerWidth = settingsManager.bannerWidth()
-            bannerHeight = settingsManager.bannerHeight()
-            selectedSpeed = settingsManager.flightSpeed()
-            selectedBg = settingsManager.cardBackground()
-            selectedText = settingsManager.textColor()
-            customBgColor = Color(hex: selectedBg)
-            customTextColor = Color(hex: selectedText)
-            let theme = settingsManager.animationTheme()
-            selectedTheme = theme
-            if theme.hasPrefix("emoji:") {
-                customEmoji = String(theme.dropFirst(6))
+        .animation(.smooth(duration: 0.3), value: isCalendarEnabled)
+        .animation(.smooth(duration: 0.3), value: isTodoistEnabled)
+        .animation(.smooth(duration: 0.3), value: isEditingToken)
+        .animation(.smooth(duration: 0.3), value: todoistStatus)
+    }
+
+    @ViewBuilder
+    private var todoistContent: some View {
+        Divider().opacity(0.4)
+
+        if todoistStatus == "Connected" && !isEditingToken {
+            HStack {
+                Text("API Token")
+                Spacer()
+                Text("••••••••••••").foregroundStyle(.secondary)
+                Button("Change") {
+                    isEditingToken = true
+                    todoistToken = ""
+                }
+                .buttonStyle(.bordered)
             }
-            selectedPosition = settingsManager.bannerPosition()
-            
-            isCalendarEnabled = settingsManager.isCalendarEnabled()
-            isTodoistEnabled = settingsManager.isTodoistEnabled()
-            calendarThresholds = Set(settingsManager.calendarThresholds())
-            todoistThresholds = Set(settingsManager.todoistThresholds())
-            todoistToken = settingsManager.todoistToken()
-            let hasToken = !todoistToken.isEmpty
-            todoistStatus = hasToken ? "Connected" : "Token Required"
-            isEditingToken = !hasToken
-            
-            if isCalendarEnabled {
-                checkPermission()
-            } else {
-                calendarStatus = "Disabled"
+
+            HStack {
+                Text("Status")
+                Spacer()
+                Label("Connected", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .fontWeight(.medium)
+            }
+
+            HStack {
+                Text("Tasks")
+                Spacer()
+                if isSyncingTodoist {
+                    ProgressView().controlSize(.small)
+                    Text("Syncing…").foregroundStyle(.secondary)
+                } else {
+                    if !lastSyncResult.isEmpty {
+                        Text(lastSyncResult).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Button {
+                        syncTodoistTasks()
+                    } label: {
+                        Label("Sync Now", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            thresholdRow(label: "Alert intervals", selected: $todoistThresholds) { updated in
+                settingsManager.setTodoistThresholds(Array(updated))
+            }
+
+            HStack {
+                Spacer()
+                Button("Disconnect", role: .destructive) {
+                    todoistToken = ""
+                    settingsManager.setTodoistToken("")
+                    todoistStatus = "Token Required"
+                    lastSyncResult = ""
+                    isEditingToken = true
+                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                }
+                .buttonStyle(.bordered)
+            }
+        } else {
+            HStack {
+                Text("API Token")
+                Spacer()
+                SecurePasteField(placeholder: "Paste token", text: $todoistToken)
+                    .frame(width: 190, height: 22)
+                if isVerifyingTodoist {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Verify") { verifyTodoistToken() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+
+            HStack {
+                Text("Status")
+                Spacer()
+                Text(todoistStatus)
+                    .foregroundStyle(statusIsError ? .red : .secondary)
+            }
+
+            if !settingsManager.todoistToken().isEmpty && isEditingToken {
+                HStack {
+                    Spacer()
+                    Button("Cancel") {
+                        todoistToken = settingsManager.todoistToken()
+                        todoistStatus = "Connected"
+                        isEditingToken = false
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }
-    
+
+    private var statusIsError: Bool {
+        todoistStatus.hasPrefix("Error") || todoistStatus.hasPrefix("Invalid") || todoistStatus.hasPrefix("Network")
+    }
+
+    private var appearancePane: some View {
+        paneScroll {
+            glassCard(title: "Animation Theme") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
+                    themeButton(key: "airplane", label: "Plane") { themePreviewImage("airplane", fallback: "✈️") }
+                    themeButton(key: "f1car", label: "F1 Car") { themePreviewImage("f1car", fallback: "🏎️") }
+                    themeButton(key: "motorbike", label: "Moto") { themePreviewImage("motorbike", fallback: "🏍️") }
+                    themeButton(key: "locomotive", label: "Train") { themePreviewImage("locomotive", fallback: "🚂") }
+                    themeButton(key: "helicopter", label: "Heli") { themePreviewImage("helicopter", fallback: "🚁") }
+                    themeButton(key: "rocket", label: "Rocket") { themePreviewImage("rocket", fallback: "🚀") }
+                    themeButton(key: "dinosaur", label: "Dino") { Text("🦕").font(.system(size: 28)) }
+                    themeButton(key: "emoji:\(customEmoji)", label: "Custom") { Text("✏️").font(.system(size: 24)) }
+                }
+
+                if selectedTheme.hasPrefix("emoji:") {
+                    Divider().opacity(0.4)
+                    HStack {
+                        Text("Custom Emoji")
+                        Spacer()
+                        TextField("Paste emoji", text: $customEmoji)
+                            .font(.system(size: 20))
+                            .frame(width: 70)
+                            .multilineTextAlignment(.center)
+                            .textFieldStyle(.roundedBorder)
+                            .onChange(of: customEmoji) {
+                                let trimmed = String(customEmoji.prefix(1))
+                                if trimmed != customEmoji { customEmoji = trimmed }
+                                let theme = "emoji:\(trimmed)"
+                                selectedTheme = theme
+                                settingsManager.setAnimationTheme(theme)
+                            }
+                    }
+                }
+            }
+
+            glassCard(title: "Banner Size") {
+                sliderRow(label: "Width", value: $bannerWidth, range: 160...400, step: 5, unit: "px") {
+                    settingsManager.setBannerWidth(bannerWidth)
+                }
+                Divider().opacity(0.4)
+                sliderRow(label: "Height", value: $bannerHeight, range: 50...120, step: 2, unit: "px") {
+                    settingsManager.setBannerHeight(bannerHeight)
+                }
+            }
+
+            glassCard(title: "Motion") {
+                HStack {
+                    Text("Flight Speed")
+                    Spacer()
+                    Picker("", selection: $selectedSpeed) {
+                        Text("Slow").tag("slow")
+                        Text("Medium").tag("medium")
+                        Text("Fast").tag("fast")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+                    .onChange(of: selectedSpeed) { settingsManager.setFlightSpeed(selectedSpeed) }
+                }
+                Divider().opacity(0.4)
+                HStack {
+                    Text("Banner Position")
+                    Spacer()
+                    Picker("", selection: $selectedPosition) {
+                        Text("Top").tag("top")
+                        Text("Middle").tag("middle")
+                        Text("Bottom").tag("bottom")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+                    .onChange(of: selectedPosition) { settingsManager.setBannerPosition(selectedPosition) }
+                }
+            }
+
+            glassCard(title: "Colors", footer: "Click ‘Join’ or ‘Open’ on the banner to launch the meeting or task. Click ‘X’ to dismiss it.") {
+                HStack {
+                    ColorPicker("Card Background", selection: $customBgColor)
+                        .onChange(of: customBgColor) {
+                            if let hex = customBgColor.toHex() {
+                                selectedBg = hex
+                                settingsManager.setCardBackground(hex)
+                            }
+                        }
+                    Spacer()
+                    swatchRow(presets: bgPresets, selectedHex: selectedBg) { hex in
+                        selectedBg = hex
+                        customBgColor = Color(hex: hex)
+                        settingsManager.setCardBackground(hex)
+                    }
+                }
+                Divider().opacity(0.4)
+                HStack {
+                    ColorPicker("Text Color", selection: $customTextColor)
+                        .onChange(of: customTextColor) {
+                            if let hex = customTextColor.toHex() {
+                                selectedText = hex
+                                settingsManager.setTextColor(hex)
+                            }
+                        }
+                    Spacer()
+                    swatchRow(presets: textPresets, selectedHex: selectedText) { hex in
+                        selectedText = hex
+                        customTextColor = Color(hex: hex)
+                        settingsManager.setTextColor(hex)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Layout helpers
+
     @ViewBuilder
-    func thresholdPicker(label: String, selected: Binding<Set<Int>>, onChange: @escaping (Set<Int>) -> Void) -> some View {
-        let all = [1, 2, 5, 10, 15, 30]
-        VStack(alignment: .leading, spacing: 5) {
+    private func paneScroll<C: View>(@ViewBuilder content: () -> C) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                content()
+            }
+            .padding(28)
+            .frame(maxWidth: 680, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func glassCard<C: View>(title: String? = nil, footer: String? = nil, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let title {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                    .padding(.leading, 6)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.07), radius: 12, x: 0, y: 5)
+            if let footer {
+                Text(footer)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 6)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func infoRow(_ label: String, _ value: String) -> some View {
+        HStack {
             Text(label)
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.5))
-            HStack(spacing: 5) {
-                ForEach(all, id: \.self) { mins in
+            Spacer()
+            Text(value).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func sliderRow(label: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double, unit: String, onChange: @escaping () -> Void) -> some View {
+        HStack {
+            Text(label)
+            Slider(value: value, in: range, step: step)
+                .frame(minWidth: 140)
+                .onChange(of: value.wrappedValue) { onChange() }
+            Text("\(Int(value.wrappedValue)) \(unit)")
+                .foregroundStyle(.secondary).monospacedDigit()
+                .frame(width: 52, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func thresholdRow(label: String, selected: Binding<Set<Int>>, onChange: @escaping (Set<Int>) -> Void) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            HStack(spacing: 6) {
+                ForEach(thresholdOptions, id: \.self) { mins in
                     let isOn = selected.wrappedValue.contains(mins)
-                    Button(action: {
+                    Button {
                         var updated = selected.wrappedValue
                         if isOn { updated.remove(mins) } else { updated.insert(mins) }
                         selected.wrappedValue = updated
                         onChange(updated)
-                    }) {
+                    } label: {
                         Text("\(mins)m")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(isOn ? .black : .white.opacity(0.5))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(isOn ? Color.amber : Color.white.opacity(0.06))
-                            .cornerRadius(4)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(isOn ? Color.white : Color.primary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(
+                                isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.ultraThinMaterial),
+                                in: Capsule()
+                            )
+                            .overlay(
+                                Capsule().stroke(Color.primary.opacity(isOn ? 0 : 0.08), lineWidth: 1)
+                            )
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .animation(.smooth(duration: 0.2), value: selected.wrappedValue)
+        }
+    }
+
+    @ViewBuilder
+    private func swatchRow(presets: [(String, String)], selectedHex: String, action: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 8) {
+            ForEach(presets, id: \.0) { (hex, _) in
+                let isSelected = selectedHex.uppercased() == hex.uppercased()
+                Button {
+                    action(hex)
+                } label: {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color(hex: hex))
+                        .frame(width: 26, height: 26)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.15),
+                                        lineWidth: isSelected ? 2.5 : 1)
+                        )
+                        .scaleEffect(isSelected ? 1.08 : 1.0)
+                }
+                .buttonStyle(.plain)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
             }
         }
     }
 
     @ViewBuilder
-    func themePreviewImage(_ name: String, fallback: String) -> some View {
+    private func themePreviewImage(_ name: String, fallback: String) -> some View {
         if let path = Bundle.main.path(forResource: name, ofType: "png"),
            let img = NSImage(contentsOfFile: path) {
             Image(nsImage: img)
@@ -604,37 +519,72 @@ struct SetupView: View {
     }
 
     @ViewBuilder
-    func themeButton<Content: View>(key: String, label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func themeButton<Content: View>(key: String, label: String, @ViewBuilder content: () -> Content) -> some View {
         let isSelected = selectedTheme == key || (key.hasPrefix("emoji:") && selectedTheme.hasPrefix("emoji:"))
-        Button(action: {
+        Button {
             selectedTheme = key
             settingsManager.setAnimationTheme(key)
-        }) {
-            VStack(spacing: 4) {
+        } label: {
+            VStack(spacing: 5) {
                 content()
                     .frame(width: 40, height: 40)
                 Text(label)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(isSelected ? .black : .white.opacity(0.6))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
             }
-            .padding(6)
-            .background(isSelected ? Color.amber.opacity(0.9) : Color.white.opacity(0.06))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.amber : Color.clear, lineWidth: 1.5)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.ultraThinMaterial),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.06),
+                            lineWidth: isSelected ? 2 : 1)
+            )
+            .scaleEffect(isSelected ? 1.0 : 0.97)
         }
         .buttonStyle(.plain)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 
-    func checkPermission() {
+    // MARK: - Logic (unchanged behavior)
+
+    private func loadSettings() {
+        bannerWidth = settingsManager.bannerWidth()
+        bannerHeight = settingsManager.bannerHeight()
+        selectedSpeed = settingsManager.flightSpeed()
+        selectedBg = settingsManager.cardBackground()
+        selectedText = settingsManager.textColor()
+        customBgColor = Color(hex: selectedBg)
+        customTextColor = Color(hex: selectedText)
+        let theme = settingsManager.animationTheme()
+        selectedTheme = theme
+        if theme.hasPrefix("emoji:") {
+            customEmoji = String(theme.dropFirst(6))
+        }
+        selectedPosition = settingsManager.bannerPosition()
+
+        isCalendarEnabled = settingsManager.isCalendarEnabled()
+        isTodoistEnabled = settingsManager.isTodoistEnabled()
+        calendarThresholds = Set(settingsManager.calendarThresholds())
+        todoistThresholds = Set(settingsManager.todoistThresholds())
+        todoistToken = settingsManager.todoistToken()
+        let hasToken = !todoistToken.isEmpty
+        todoistStatus = hasToken ? "Connected" : "Token Required"
+        isEditingToken = !hasToken
+
+        checkPermission()
+    }
+
+    private func checkPermission() {
         let authorized = calendarManager.isCalendarAuthorized()
         isAuthorized = authorized
         calendarStatus = authorized ? "Granted" : "Denied / Tap to Request"
     }
-    
-    func requestPermission() {
+
+    private func requestPermission() {
         calendarManager.requestAccess { granted in
             DispatchQueue.main.async {
                 isAuthorized = granted
@@ -642,8 +592,8 @@ struct SetupView: View {
             }
         }
     }
-    
-    func syncTodoistTasks() {
+
+    private func syncTodoistTasks() {
         isSyncingTodoist = true
         lastSyncResult = ""
         onSyncTodoist { count, error in
@@ -651,15 +601,14 @@ struct SetupView: View {
             if let error = error {
                 lastSyncResult = "Sync failed: \(error.localizedDescription)"
             } else if let count = count {
-                let now = Date()
                 let formatter = DateFormatter()
                 formatter.dateFormat = "h:mm a"
-                lastSyncResult = "\(count) task\(count == 1 ? "" : "s") at \(formatter.string(from: now))"
+                lastSyncResult = "\(count) task\(count == 1 ? "" : "s") at \(formatter.string(from: Date()))"
             }
         }
     }
 
-    func verifyTodoistToken() {
+    private func verifyTodoistToken() {
         guard !todoistToken.isEmpty else {
             todoistStatus = "Token Required"
             return
@@ -693,39 +642,60 @@ struct SetupView: View {
     }
 }
 
+// MARK: - Vibrancy (frosted-glass window background)
+
+struct VisualEffectBackground: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .underWindowBackground
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
 struct SecurePasteField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
-    
+
     func makeNSView(context: Context) -> NSSecureTextField {
         let textField = PasteSecureTextField()
         textField.placeholderString = placeholder
-        textField.isBordered = false
-        textField.drawsBackground = false
+        textField.isBordered = true
+        textField.bezelStyle = .roundedBezel
+        textField.drawsBackground = true
         textField.delegate = context.coordinator
-        textField.focusRingType = .none
-        textField.textColor = .white
-        textField.font = NSFont.systemFont(ofSize: 11)
+        textField.focusRingType = .default
+        textField.textColor = .labelColor
+        textField.font = NSFont.systemFont(ofSize: 12)
         return textField
     }
-    
+
     func updateNSView(_ nsView: NSSecureTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
         }
     }
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: SecurePasteField
-        
+
         init(_ parent: SecurePasteField) {
             self.parent = parent
         }
-        
+
         func controlTextDidChange(_ obj: Notification) {
             if let textField = obj.object as? NSTextField {
                 parent.text = textField.stringValue

@@ -1,11 +1,40 @@
 import Foundation
 
 struct TodoistDue: Codable {
-    let date: String       // "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SSZ"
+    let date: String       // "YYYY-MM-DD", floating "YYYY-MM-DDTHH:MM:SS", or absolute "...Z"/"...+05:30"
     let timezone: String?
 
     // True when the due date includes a specific time
     var isDatetime: Bool { date.contains("T") }
+
+    // Resolves the due string to an absolute Date, handling both
+    // absolute (UTC/offset) and floating (no-offset, local) Todoist formats.
+    var parsedDate: Date? {
+        guard isDatetime else { return nil }
+
+        let hasOffset = date.hasSuffix("Z")
+            || date.range(of: "[+-]\\d{2}:?\\d{2}$", options: .regularExpression) != nil
+
+        if hasOffset {
+            // Absolute instant — e.g. "2026-05-23T14:06:26Z"
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime]
+            if let d = iso.date(from: date) { return d }
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return iso.date(from: date)
+        }
+
+        // Floating time — e.g. "2026-05-23T20:01:00". Interpret in the task's
+        // timezone if named, otherwise the user's current timezone.
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = timezone.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
+        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm"] {
+            df.dateFormat = format
+            if let d = df.date(from: date) { return d }
+        }
+        return nil
+    }
 }
 
 struct TodoistTask: Codable {

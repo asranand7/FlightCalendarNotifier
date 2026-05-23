@@ -12,16 +12,7 @@ struct CalendarEvent: Codable {
 
 class CalendarManager {
     let eventStore = EKEventStore()
-    
-    // Path to the python script inside the app bundle resources
-    var scriptPath: String {
-        if let path = Bundle.main.path(forResource: "fetch_calendar", ofType: "py") {
-            return path
-        }
-        // Fallback for local development
-        return "/Users/anand/Desktop/dev/FlightCalendarNotifier/fetch_calendar.py"
-    }
-    
+
     func requestAccess(completion: @escaping (Bool) -> Void) {
         let status = EKEventStore.authorizationStatus(for: .event)
         if status == .authorized {
@@ -54,79 +45,75 @@ class CalendarManager {
         return false
     }
     
-    private struct PythonEvent: Codable {
-        let title: String
-        let startDate: Double
-        let endDate: Double
-        let eventIdentifier: String
-        let platform: String?
-        let url: String?
-    }
-    
-    private func runPythonCalendarScript(action: String, completion: @escaping ([CalendarEvent]) -> Void) {
-        let process = Process()
-        let pipe = Pipe()
-        
-        process.standardOutput = pipe
-        process.standardError = Pipe() // Silence stderr
-        process.arguments = [scriptPath, "--action", action]
-        
-        // Dynamically locate the Homebrew Python or System Python executable
-        var pythonExecutable = "/opt/homebrew/bin/python3"
-        if !FileManager.default.fileExists(atPath: pythonExecutable) {
-            pythonExecutable = "/usr/bin/python3"
+    // MARK: - Native EventKit fetching
+
+    private func meetingPlatform(location: String?, url: URL?, notes: String?) -> String? {
+        let loc = (location ?? "").lowercased()
+        let urlStr = (url?.absoluteString ?? "").lowercased()
+        let notesStr = (notes ?? "").lowercased()
+        func matches(_ needle: String) -> Bool {
+            return loc.contains(needle) || urlStr.contains(needle) || notesStr.contains(needle)
         }
-        process.executableURL = URL(fileURLWithPath: pythonExecutable)
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            
-            if action == "upcoming" {
-                if let pyEvents = try? JSONDecoder().decode([PythonEvent].self, from: data) {
-                    let events = pyEvents.map {
-                        CalendarEvent(
-                            title: $0.title,
-                            startDate: Date(timeIntervalSince1970: $0.startDate),
-                            endDate: Date(timeIntervalSince1970: $0.endDate),
-                            eventIdentifier: $0.eventIdentifier,
-                            platform: $0.platform,
-                            url: $0.url
-                        )
-                    }
-                    completion(events)
-                    return
-                }
-            } else if action == "next" {
-                if let pyEvent = try? JSONDecoder().decode(PythonEvent.self, from: data) {
-                    let event = CalendarEvent(
-                        title: pyEvent.title,
-                        startDate: Date(timeIntervalSince1970: pyEvent.startDate),
-                        endDate: Date(timeIntervalSince1970: pyEvent.endDate),
-                        eventIdentifier: pyEvent.eventIdentifier,
-                        platform: pyEvent.platform,
-                        url: pyEvent.url
-                    )
-                    completion([event])
-                    return
-                }
+        if matches("meet.google.com") { return "Google Meet" }
+        if matches("zoom.us") { return "Zoom" }
+        if matches("teams.microsoft.com") { return "Teams" }
+        if let location = location, !location.isEmpty { return location }
+        return nil
+    }
+
+    private func meetingURL(for event: EKEvent) -> String? {
+        if let url = event.url { return url.absoluteString }
+        if let loc = event.location, loc.lowercased().hasPrefix("http") { return loc }
+
+        let notes = event.notes ?? ""
+        guard let regex = try? NSRegularExpression(pattern: "(https?://\\S+)") else { return nil }
+        let range = NSRange(notes.startIndex..., in: notes)
+        let urls: [String] = regex.matches(in: notes, range: range).compactMap {
+            Range($0.range, in: notes).map { String(notes[$0]) }
+        }
+        let trimChars = CharacterSet(charactersIn: ".,;)")
+        for u in urls {
+            let ul = u.lowercased()
+            if ul.contains("meet.google.com") || ul.contains("zoom.us") || ul.contains("teams.microsoft.com") {
+                return u.trimmingCharacters(in: trimChars)
             }
-            completion([])
-        } catch {
-            print("Failed to run python calendar helper: \(error.localizedDescription)")
-            completion([])
         }
+        return urls.first?.trimmingCharacters(in: trimChars)
     }
-    
+
+    private func isDeclined(_ event: EKEvent) -> Bool {
+        guard let attendees = event.attendees else { return false }
+        return attendees.contains { $0.isCurrentUser && $0.participantStatus == .declined }
+    }
+
+    private func mapEvent(_ event: EKEvent) -> CalendarEvent {
+        return CalendarEvent(
+            title: event.title ?? "Untitled Meeting",
+            startDate: event.startDate,
+            endDate: event.endDate,
+            eventIdentifier: event.eventIdentifier ?? UUID().uuidString,
+            platform: meetingPlatform(location: event.location, url: event.url, notes: event.notes),
+            url: meetingURL(for: event)
+        )
+    }
+
     func fetchUpcomingEvents(completion: @escaping ([CalendarEvent]) -> Void) {
-        runPythonCalendarScript(action: "upcoming", completion: completion)
+        guard isCalendarAuthorized() else { completion([]); return }
+        let now = Date()
+        let predicate = eventStore.predicateForEvents(withStart: now, end: now.addingTimeInterval(45 * 60), calendars: nil)
+        let result = eventStore.events(matching: predicate)
+            .filter { !$0.isAllDay && !isDeclined($0) }
+            .map { mapEvent($0) }
+        completion(result)
     }
-    
+
     func fetchNextUpcomingEvent(completion: @escaping (CalendarEvent?) -> Void) {
-        runPythonCalendarScript(action: "next") { events in
-            completion(events.first)
-        }
+        guard isCalendarAuthorized() else { completion(nil); return }
+        let now = Date()
+        let predicate = eventStore.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 60 * 60), calendars: nil)
+        let result = eventStore.events(matching: predicate)
+            .filter { !$0.isAllDay && !isDeclined($0) && $0.startDate > now }
+            .sorted { $0.startDate < $1.startDate }
+        completion(result.first.map { mapEvent($0) })
     }
 }

@@ -22,14 +22,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         
         // Open setup window in foreground
-        let windowFrame = NSRect(x: 100, y: 100, width: 400, height: 720)
+        let windowFrame = NSRect(x: 100, y: 100, width: 760, height: 560)
         window = NSWindow(
             contentRect: windowFrame,
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Flyby"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SetupView(
             calendarManager: calendarManager,
@@ -279,8 +283,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 2. Process Todoist Tasks (if enabled and cached)
         if settingsManager.isTodoistEnabled() {
-            let formatter = ISO8601DateFormatter()
-            
             // Clean up triggered keys for Todoist tasks that are no longer in the cache
             let activeTaskIds = Set(cachedTodoistTasks.map { "todoist_\($0.id)" })
             let keysToRemove = triggeredEvents.keys.filter { $0.hasPrefix("todoist_") && !activeTaskIds.contains($0) }
@@ -290,8 +292,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             
             for task in cachedTodoistTasks {
-                guard let due = task.due, due.isDatetime,
-                      let dueDate = formatter.date(from: due.date) else { continue }
+                guard let dueDate = task.due?.parsedDate else { continue }
                 
                 let diffInSeconds = dueDate.timeIntervalSince(now)
                 
