@@ -106,13 +106,11 @@ struct SetupView: View {
                 if isTodoistEnabled {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            SecureField("API Token", text: $todoistToken)
-                                .textFieldStyle(PlainTextFieldStyle())
-                                .font(.system(size: 11))
-                                .padding(6)
+                            SecurePasteField(placeholder: "API Token", text: $todoistToken)
+                                .padding(5)
                                 .background(Color.black.opacity(0.3))
                                 .cornerRadius(5)
-                                .foregroundColor(.white)
+                                .frame(height: 24)
                             
                             if isVerifyingTodoist {
                                 ProgressView().scaleEffect(0.5).frame(width: 20, height: 20)
@@ -541,5 +539,79 @@ struct SetupView: View {
                 }
             }
         }
+    }
+}
+
+struct SecurePasteField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    
+    func makeNSView(context: Context) -> NSSecureTextField {
+        let textField = PasteSecureTextField()
+        textField.placeholderString = placeholder
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.delegate = context.coordinator
+        textField.focusRingType = .none
+        textField.textColor = .white
+        textField.font = NSFont.systemFont(ofSize: 11)
+        return textField
+    }
+    
+    func updateNSView(_ nsView: NSSecureTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: SecurePasteField
+        
+        init(_ parent: SecurePasteField) {
+            self.parent = parent
+        }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            if let textField = obj.object as? NSTextField {
+                parent.text = textField.stringValue
+            }
+        }
+    }
+}
+
+class PasteSecureTextField: NSSecureTextField {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command {
+            switch event.charactersIgnoringModifiers {
+            case "x":
+                if let editor = self.currentEditor() {
+                    editor.cut(nil)
+                    return true
+                }
+            case "c":
+                if let editor = self.currentEditor() {
+                    editor.copy(nil)
+                    return true
+                }
+            case "v":
+                if let editor = self.currentEditor() {
+                    editor.paste(nil)
+                    return true
+                }
+            case "a":
+                if let editor = self.currentEditor() {
+                    editor.selectAll(nil)
+                    return true
+                }
+            default:
+                break
+            }
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
