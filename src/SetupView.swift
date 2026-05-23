@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import UniformTypeIdentifiers
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
@@ -37,6 +38,7 @@ struct SetupView: View {
     @State private var selectedText: String = "#FFFFFF"
     @State private var selectedTheme: String = "airplane"
     @State private var customEmoji: String = ""
+    @State private var customImagePath: String? = nil
     @State private var selectedPosition: String = "top"
     @State private var customBgColor: Color = Color(hex: "#20222C")
     @State private var customTextColor: Color = Color(hex: "#FFFFFF")
@@ -349,7 +351,8 @@ struct SetupView: View {
                     themeButton(key: "helicopter", label: "Heli") { themePreviewImage("helicopter", fallback: "🚁") }
                     themeButton(key: "rocket", label: "Rocket") { themePreviewImage("rocket", fallback: "🚀") }
                     themeButton(key: "dinosaur", label: "Dino") { Text("🦕").font(.system(size: 28)) }
-                    themeButton(key: "emoji:\(customEmoji)", label: "Custom") { Text("✏️").font(.system(size: 24)) }
+                    themeButton(key: "emoji:\(customEmoji)", label: "Emoji") { Text("✏️").font(.system(size: 24)) }
+                    customImageTile()
                 }
 
                 if selectedTheme.hasPrefix("emoji:") {
@@ -658,6 +661,60 @@ struct SetupView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 
+    @ViewBuilder
+    private func customImageTile() -> some View {
+        let isSelected = selectedTheme == "custom_image"
+        Button { pickCustomImage() } label: {
+            VStack(spacing: 5) {
+                Group {
+                    if let path = customImagePath, let img = NSImage(contentsOfFile: path) {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 34, height: 34)
+                    } else {
+                        Image(systemName: isSelected ? "photo.fill" : "photo.badge.plus")
+                            .font(.system(size: 22))
+                            .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                            .frame(width: 34, height: 34)
+                    }
+                }
+                Text(customImagePath != nil ? "Image" : "Add Image")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.14)) : AnyShapeStyle(.ultraThinMaterial),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.06),
+                            lineWidth: isSelected ? 2 : 1)
+            )
+            .scaleEffect(isSelected ? 1.0 : 0.97)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+
+    private func pickCustomImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose any image — Flyby will resize and convert it automatically."
+        panel.prompt = "Use Image"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let dest = SettingsManager.processAndSaveCustomImage(from: url) else { return }
+        customImagePath = dest.path
+        settingsManager.setCustomImagePath(dest.path)
+        selectedTheme = "custom_image"
+        settingsManager.setAnimationTheme("custom_image")
+    }
+
     // MARK: - Logic (unchanged behavior)
 
     private func loadSettings() {
@@ -674,6 +731,7 @@ struct SetupView: View {
             customEmoji = String(theme.dropFirst(6))
         }
         selectedPosition = settingsManager.bannerPosition()
+        customImagePath = settingsManager.customImagePath()
 
         isCalendarEnabled = settingsManager.isCalendarEnabled()
         isTodoistEnabled = settingsManager.isTodoistEnabled()

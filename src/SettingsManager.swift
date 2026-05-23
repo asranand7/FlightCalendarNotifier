@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 
 class SettingsManager {
     private let defaults = UserDefaults.standard
@@ -17,6 +18,7 @@ class SettingsManager {
     private let isCalendarEnabledKey = "is_calendar_enabled"
     private let isTodoistEnabledKey = "is_todoist_enabled"
     private let todoistTokenKey = "todoist_token"
+    private let customImagePathKey = "custom_image_path"
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -210,6 +212,68 @@ class SettingsManager {
     
     func setTodoistToken(_ token: String) {
         defaults.set(token, forKey: todoistTokenKey)
+    }
+
+    func customImagePath() -> String? {
+        return defaults.string(forKey: customImagePathKey)
+    }
+
+    func setCustomImagePath(_ path: String?) {
+        if let path = path {
+            defaults.set(path, forKey: customImagePathKey)
+        } else {
+            defaults.removeObject(forKey: customImagePathKey)
+        }
+    }
+
+    // Accepts any NSImage-readable format, resizes to ≤256px (retina-safe), saves as PNG.
+    // Returns the destination URL on success.
+    static func processAndSaveCustomImage(from sourceURL: URL) -> URL? {
+        guard let source = NSImage(contentsOf: sourceURL) else { return nil }
+
+        // Work in pixels: prefer the highest-res representation
+        var pixelSize = CGSize.zero
+        for rep in source.representations {
+            let s = CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+            if s.width * s.height > pixelSize.width * pixelSize.height { pixelSize = s }
+        }
+        if pixelSize == .zero { pixelSize = source.size }
+
+        let maxPx: CGFloat = 256
+        let scale = min(maxPx / pixelSize.width, maxPx / pixelSize.height, 1.0)
+        let targetSize = CGSize(width: max(1, pixelSize.width * scale),
+                                height: max(1, pixelSize.height * scale))
+
+        guard let offscreen = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(targetSize.width),
+            pixelsHigh: Int(targetSize.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: offscreen)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        source.draw(in: CGRect(origin: .zero, size: targetSize),
+                    from: CGRect(origin: .zero, size: pixelSize),
+                    operation: .sourceOver, fraction: 1.0)
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let pngData = offscreen.representation(using: .png, properties: [:]) else { return nil }
+
+        guard let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = appSupport.appendingPathComponent("com.anand.FlightNotifier", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        let dest = dir.appendingPathComponent("custom_theme.png")
+        try? pngData.write(to: dest)
+        return dest
     }
 }
 

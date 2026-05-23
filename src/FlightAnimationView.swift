@@ -136,6 +136,8 @@ struct FlightAnimationView: View {
             Text("🦕")
                 .font(.system(size: 32))
                 .offset(y: bobOffset)
+        case "custom_image":
+            customImageSubject()
         default:
             if animationThemeName.hasPrefix("emoji:") {
                 let emoji = String(animationThemeName.dropFirst(6))
@@ -148,6 +150,29 @@ struct FlightAnimationView: View {
                     .rotationEffect(.degrees(pitchAngle))
                     .offset(y: pitchAngle > 0 ? 2 : -2)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func customImageSubject() -> some View {
+        let img: NSImage? = {
+            if let appSupport = FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask).first {
+                let path = appSupport
+                    .appendingPathComponent("com.anand.FlightNotifier/custom_theme.png").path
+                return NSImage(contentsOfFile: path)
+            }
+            return nil
+        }()
+        if let img = img {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 52, height: 52)
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .offset(y: bobOffset)
+        } else {
+            Text("🖼️").font(.system(size: 30)).offset(y: bobOffset)
         }
     }
 
@@ -166,6 +191,10 @@ struct FlightAnimationView: View {
         case "rocket":
             withAnimation(Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 bobOffset = 6.0
+            }
+        case "custom_image":
+            withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                bobOffset = 4.0
             }
         default:
             if animationThemeName.hasPrefix("emoji:") {
