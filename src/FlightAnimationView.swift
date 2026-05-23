@@ -196,11 +196,15 @@ struct BannerView: View {
     let onClose: () -> Void
     
     private var timeRangeString: String {
-        guard let start = startDate, let end = endDate else { return "" }
+        guard let start = startDate else { return "" }
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         formatter.dateStyle = .none
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        if let end = endDate {
+            return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        } else {
+            return "Due at \(formatter.string(from: start))"
+        }
     }
     
     private var platformIcon: String {
@@ -208,6 +212,7 @@ struct BannerView: View {
         if plat.contains("meet") { return "video" }
         if plat.contains("zoom") { return "video.circle" }
         if plat.contains("teams") { return "video" }
+        if plat.contains("todoist") { return "checkmark.circle" }
         return "mappin.and.ellipse"
     }
     
@@ -307,7 +312,7 @@ struct BannerView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: platformIcon)
                                         .font(.system(size: 10, weight: .bold))
-                                    Text("Join")
+                                    Text(platform?.lowercased().contains("todoist") == true ? "View" : "Join")
                                         .font(.system(size: 10.5, weight: .black))
                                 }
                                 .fixedSize(horizontal: true, vertical: false)

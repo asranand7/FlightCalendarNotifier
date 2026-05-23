@@ -18,6 +18,12 @@ struct SetupView: View {
     @State private var customBgColor: Color = Color(hex: "#20222C")
     @State private var customTextColor: Color = Color(hex: "#FFFFFF")
     
+    @State private var isCalendarEnabled: Bool = false
+    @State private var isTodoistEnabled: Bool = false
+    @State private var todoistToken: String = ""
+    @State private var todoistStatus: String = "Disconnected"
+    @State private var isVerifyingTodoist: Bool = false
+    
     var body: some View {
         VStack(spacing: 14) {
             // Header
@@ -50,6 +56,103 @@ struct SetupView: View {
                                 requestPermission()
                             }
                         }
+                }
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+            
+            // Reminder Sources Panel
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Reminder Sources")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white.opacity(0.8))
+                
+                Toggle("Enable Calendar Reminders", isOn: $isCalendarEnabled)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.75))
+                    .toggleStyle(SwitchToggleStyle(tint: .amber))
+                    .onChange(of: isCalendarEnabled) {
+                        settingsManager.setCalendarEnabled(isCalendarEnabled)
+                        if isCalendarEnabled {
+                            requestPermission()
+                        } else {
+                            calendarStatus = "Disabled"
+                        }
+                        NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                    }
+                
+                Divider().background(Color.white.opacity(0.05))
+                
+                Toggle("Enable Todoist Reminders", isOn: $isTodoistEnabled)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.75))
+                    .toggleStyle(SwitchToggleStyle(tint: .amber))
+                    .onChange(of: isTodoistEnabled) {
+                        settingsManager.setTodoistEnabled(isTodoistEnabled)
+                        if !isTodoistEnabled {
+                            todoistStatus = "Disconnected"
+                            NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                        } else {
+                            todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
+                            NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                        }
+                    }
+                
+                if isTodoistEnabled {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            SecureField("API Token", text: $todoistToken)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .font(.system(size: 11))
+                                .padding(6)
+                                .background(Color.black.opacity(0.3))
+                                .cornerRadius(5)
+                                .foregroundColor(.white)
+                            
+                            if isVerifyingTodoist {
+                                ProgressView().scaleEffect(0.5).frame(width: 20, height: 20)
+                            } else {
+                                Button("Verify") {
+                                    verifyTodoistToken()
+                                }
+                                .font(.system(size: 10, weight: .bold))
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.amber)
+                                .foregroundColor(.black)
+                                .cornerRadius(4)
+                            }
+                        }
+                        
+                        HStack {
+                            Text("Status: ")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.5))
+                            Text(todoistStatus)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(todoistStatus == "Connected" ? .green : (todoistStatus == "Disconnected" || todoistStatus == "Token Required" ? .white.opacity(0.6) : .red))
+                            
+                            if !todoistToken.isEmpty && todoistStatus == "Connected" {
+                                Spacer()
+                                Button("Disconnect") {
+                                    todoistToken = ""
+                                    settingsManager.setTodoistToken("")
+                                    todoistStatus = "Token Required"
+                                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                                }
+                                .font(.system(size: 9))
+                                .foregroundColor(.red.opacity(0.8))
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
                 }
             }
             .padding(10)
@@ -350,7 +453,17 @@ struct SetupView: View {
                 customEmoji = String(theme.dropFirst(6))
             }
             selectedPosition = settingsManager.bannerPosition()
-            checkPermission()
+            
+            isCalendarEnabled = settingsManager.isCalendarEnabled()
+            isTodoistEnabled = settingsManager.isTodoistEnabled()
+            todoistToken = settingsManager.todoistToken()
+            todoistStatus = todoistToken.isEmpty ? "Token Required" : "Connected"
+            
+            if isCalendarEnabled {
+                checkPermission()
+            } else {
+                calendarStatus = "Disabled"
+            }
         }
     }
     
@@ -403,6 +516,29 @@ struct SetupView: View {
             DispatchQueue.main.async {
                 isAuthorized = granted
                 calendarStatus = granted ? "Granted" : "Denied"
+            }
+        }
+    }
+    
+    func verifyTodoistToken() {
+        guard !todoistToken.isEmpty else {
+            todoistStatus = "Token Required"
+            return
+        }
+        isVerifyingTodoist = true
+        todoistStatus = "Verifying..."
+        
+        let tManager = TodoistManager()
+        tManager.fetchTasks(token: todoistToken) { tasks, error in
+            DispatchQueue.main.async {
+                isVerifyingTodoist = false
+                if error != nil {
+                    todoistStatus = "Invalid Token / Error"
+                } else {
+                    todoistStatus = "Connected"
+                    settingsManager.setTodoistToken(todoistToken)
+                    NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
+                }
             }
         }
     }

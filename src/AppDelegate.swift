@@ -5,12 +5,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBarItem: NSStatusItem!
     let calendarManager = CalendarManager()
     let settingsManager = SettingsManager()
+    let todoistManager = TodoistManager()
     var timer: Timer?
+    var todoistTimer: Timer?
     var activeWindows: [NSWindow] = []
     var window: NSWindow!
     
     // Store triggered thresholds: eventIdentifier -> Set of intervals (e.g. [10, 5])
     var triggeredEvents: [String: Set<Int>] = [:]
+    
+    // Store fetched Todoist tasks
+    var cachedTodoistTasks: [TodoistTask] = []
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Initialize the menu bar UI
@@ -42,15 +47,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
-        // Start background polling immediately (Python bridge handles authentication)
-        calendarManager.requestAccess { [weak self] granted in
-            print("🔑 Calendar access request completed. Granted: \(granted)")
-            DispatchQueue.main.async {
-                self?.updateMenu()
-                if granted {
-                    self?.startTimer()
+        // Register for settings/token changes
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSettingsChanged), name: Notification.Name("TodoistTokenChanged"), object: nil)
+        
+        // Start timers conditionally based on settings
+        if settingsManager.isCalendarEnabled() {
+            calendarManager.requestAccess { [weak self] granted in
+                print("🔑 Calendar access request completed. Granted: \(granted)")
+                DispatchQueue.main.async {
+                    self?.updateMenu()
+                    if granted {
+                        self?.startTimer()
+                    }
                 }
             }
+        } else {
+            updateMenu()
+        }
+        
+        if settingsManager.isTodoistEnabled() {
+            startTodoistTimer()
         }
     }
     
@@ -161,6 +177,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func updateNextMeetingLabel(_ menuItem: NSMenuItem) {
+        if !settingsManager.isCalendarEnabled() {
+            menuItem.title = "📅 Reminders: Open Setup to Enable"
+            return
+        }
         calendarManager.fetchNextUpcomingEvent { event in
             DispatchQueue.main.async {
                 if let event = event {
@@ -182,65 +202,185 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func checkCalendarForUpcomingMeetings() {
-        print("📅 Polling calendar for upcoming meetings...")
-        calendarManager.fetchUpcomingEvents { [weak self] events in
-            guard let self = self else { return }
-            let now = Date()
-            
-            print("🔍 Found \(events.count) upcoming events in the next 45 minutes:")
-            for event in events {
-                print("   - [\(event.title)] starting at \(event.startDate)")
+        let now = Date()
+        let enabledThresholds = self.settingsManager.enabledThresholds()
+        
+        // 1. Process Calendar Events (if enabled)
+        if settingsManager.isCalendarEnabled() {
+            print("📅 Polling calendar for upcoming meetings...")
+            calendarManager.fetchUpcomingEvents { [weak self] events in
+                guard let self = self else { return }
+                
+                print("🔍 Found \(events.count) upcoming events in the next 45 minutes:")
+                for event in events {
+                    print("   - [\(event.title)] starting at \(event.startDate)")
+                }
+                
+                DispatchQueue.main.async {
+                    if let menu = self.statusBarItem.menu, menu.items.count > 2 {
+                        let nextMeetingItem = menu.items[2]
+                        self.updateNextMeetingLabel(nextMeetingItem)
+                    }
+                }
+                
+                let activeEventIds = Set(events.compactMap { $0.eventIdentifier })
+                
+                DispatchQueue.main.async {
+                    let keysToRemove = self.triggeredEvents.keys.filter { !$0.hasPrefix("todoist_") && !activeEventIds.contains($0) }
+                    for key in keysToRemove {
+                        print("🧹 Clearing triggered memory for old calendar event ID: \(key)")
+                        self.triggeredEvents.removeValue(forKey: key)
+                    }
+                    
+                    for event in events {
+                        let eventId = event.eventIdentifier
+                        let startDate = event.startDate
+                        
+                        let diffInSeconds = startDate.timeIntervalSince(now)
+                        let diffInMinutes = Int(round(diffInSeconds / 60.0))
+                        print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(Int(diffInSeconds))s)")
+                        
+                        for threshold in enabledThresholds {
+                            // Fire if within 45 seconds of the threshold — robust against poll timing gaps
+                            let thresholdSeconds = Double(threshold) * 60.0
+                            let withinWindow = diffInSeconds > 0 && abs(diffInSeconds - thresholdSeconds) <= 45
+                            if withinWindow {
+                                var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
+                                if !triggeredSet.contains(threshold) {
+                                    print("🔔 Triggering \(threshold)-minute notification for [\(event.title)]!")
+                                    triggeredSet.insert(threshold)
+                                    self.triggeredEvents[eventId] = triggeredSet
+                                    self.showFlightAnimation(
+                                        meetingTitle: event.title,
+                                        minutesRemaining: threshold,
+                                        startDate: event.startDate,
+                                        endDate: event.endDate,
+                                        platform: event.platform,
+                                        meetingUrl: event.url
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            
+        } else {
+            // Update next meeting label to disabled state
             DispatchQueue.main.async {
                 if let menu = self.statusBarItem.menu, menu.items.count > 2 {
                     let nextMeetingItem = menu.items[2]
                     self.updateNextMeetingLabel(nextMeetingItem)
                 }
             }
+        }
+        
+        // 2. Process Todoist Tasks (if enabled and cached)
+        if settingsManager.isTodoistEnabled() {
+            let formatter = ISO8601DateFormatter()
             
-            let activeEventIds = Set(events.compactMap { $0.eventIdentifier })
+            // Clean up triggered keys for Todoist tasks that are no longer in the cache
+            let activeTaskIds = Set(cachedTodoistTasks.map { "todoist_\($0.id)" })
+            let keysToRemove = triggeredEvents.keys.filter { $0.hasPrefix("todoist_") && !activeTaskIds.contains($0) }
+            for key in keysToRemove {
+                print("🧹 Clearing triggered memory for old Todoist task ID: \(key)")
+                triggeredEvents.removeValue(forKey: key)
+            }
             
-            DispatchQueue.main.async {
-                for eventId in self.triggeredEvents.keys {
-                    if !activeEventIds.contains(eventId) {
-                        print("🧹 Clearing triggered memory for old event ID: \(eventId)")
-                        self.triggeredEvents.removeValue(forKey: eventId)
+            for task in cachedTodoistTasks {
+                guard let datetimeString = task.due?.datetime,
+                      let dueDate = formatter.date(from: datetimeString) else { continue }
+                
+                let diffInSeconds = dueDate.timeIntervalSince(now)
+                
+                let eventId = "todoist_\(task.id)"
+                
+                for threshold in enabledThresholds {
+                    let thresholdSeconds = Double(threshold) * 60.0
+                    // Tight, robust window matched to timer interval
+                    let withinWindow = diffInSeconds <= thresholdSeconds && diffInSeconds > (thresholdSeconds - 15.0)
+                    
+                    if withinWindow {
+                        var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
+                        if !triggeredSet.contains(threshold) {
+                            print("🔔 Triggering \(threshold)-minute Todoist notification for [\(task.content)]!")
+                            triggeredSet.insert(threshold)
+                            self.triggeredEvents[eventId] = triggeredSet
+                            
+                            self.showFlightAnimation(
+                                meetingTitle: task.content,
+                                minutesRemaining: threshold,
+                                startDate: dueDate,
+                                endDate: nil, // Tasks do not have an end time
+                                platform: "Todoist",
+                                meetingUrl: task.url
+                            )
+                        }
                     }
                 }
-                
-                let enabledThresholds = self.settingsManager.enabledThresholds()
-                
-                for event in events {
-                    let eventId = event.eventIdentifier
-                    let startDate = event.startDate
-                    
-                    let diffInSeconds = startDate.timeIntervalSince(now)
-                    let diffInMinutes = Int(round(diffInSeconds / 60.0))
-                    print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(Int(diffInSeconds))s)")
+            }
+        }
+    }
 
-                    for threshold in enabledThresholds {
-                        // Fire if within 45 seconds of the threshold — robust against poll timing gaps
-                        let thresholdSeconds = Double(threshold) * 60.0
-                        let withinWindow = diffInSeconds > 0 && abs(diffInSeconds - thresholdSeconds) <= 45
-                        if withinWindow {
-                            var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
-                            if !triggeredSet.contains(threshold) {
-                                print("🔔 Triggering \(threshold)-minute notification for [\(event.title)]!")
-                                triggeredSet.insert(threshold)
-                                self.triggeredEvents[eventId] = triggeredSet
-                                self.showFlightAnimation(
-                                    meetingTitle: event.title,
-                                    minutesRemaining: threshold,
-                                    startDate: event.startDate,
-                                    endDate: event.endDate,
-                                    platform: event.platform,
-                                    meetingUrl: event.url
-                                )
+    @objc func handleSettingsChanged() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.updateMenu()
+            
+            if self.settingsManager.isCalendarEnabled() {
+                if self.timer == nil {
+                    self.calendarManager.requestAccess { granted in
+                        if granted {
+                            DispatchQueue.main.async {
+                                self.startTimer()
                             }
                         }
                     }
                 }
+            } else {
+                self.timer?.invalidate()
+                self.timer = nil
+                let keysToRemove = self.triggeredEvents.keys.filter { !$0.hasPrefix("todoist_") }
+                for key in keysToRemove {
+                    self.triggeredEvents.removeValue(forKey: key)
+                }
+            }
+            
+            if self.settingsManager.isTodoistEnabled() {
+                self.startTodoistTimer()
+            } else {
+                self.todoistTimer?.invalidate()
+                self.todoistTimer = nil
+                self.cachedTodoistTasks.removeAll()
+                let keysToRemove = self.triggeredEvents.keys.filter { $0.hasPrefix("todoist_") }
+                for key in keysToRemove {
+                    self.triggeredEvents.removeValue(forKey: key)
+                }
+            }
+        }
+    }
+    
+    func startTodoistTimer() {
+        print("⏱️ Starting Todoist caching timer (interval: 10m)")
+        todoistTimer?.invalidate()
+        let t = Timer.scheduledTimer(withTimeInterval: 600.0, repeats: true) { [weak self] _ in
+            self?.fetchTodoistTasks()
+        }
+        RunLoop.current.add(t, forMode: .common)
+        todoistTimer = t
+        fetchTodoistTasks()
+    }
+    
+    func fetchTodoistTasks() {
+        let token = settingsManager.todoistToken()
+        guard !token.isEmpty && settingsManager.isTodoistEnabled() else { return }
+        print("📥 Fetching Todoist tasks for cache...")
+        todoistManager.fetchTasks(token: token) { [weak self] tasks, error in
+            guard let self = self else { return }
+            if let error = error {
+                print("⚠️ Todoist fetch failed: \(error.localizedDescription)")
+            } else if let tasks = tasks {
+                print("✅ Todoist cache updated: found \(tasks.count) timed tasks")
+                self.cachedTodoistTasks = tasks
             }
         }
     }

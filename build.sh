@@ -20,6 +20,7 @@ swiftc \
   src/AppDelegate.swift \
   src/CalendarManager.swift \
   src/SettingsManager.swift \
+  src/TodoistManager.swift \
   src/FlightOverlayPanel.swift \
   src/FlightAnimationView.swift \
   src/SetupView.swift \

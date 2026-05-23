@@ -12,6 +12,9 @@ class SettingsManager {
     private let bannerPositionKey = "banner_position"
     private let bannerWidthKey = "banner_width"
     private let bannerHeightKey = "banner_height"
+    private let isCalendarEnabledKey = "is_calendar_enabled"
+    private let isTodoistEnabledKey = "is_todoist_enabled"
+    private let todoistTokenKey = "todoist_token"
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -62,6 +65,15 @@ class SettingsManager {
         }
         if defaults.object(forKey: bannerHeightKey) == nil {
             defaults.set(76.0, forKey: bannerHeightKey)
+        }
+        if defaults.object(forKey: isCalendarEnabledKey) == nil {
+            defaults.set(false, forKey: isCalendarEnabledKey)
+        }
+        if defaults.object(forKey: isTodoistEnabledKey) == nil {
+            defaults.set(false, forKey: isTodoistEnabledKey)
+        }
+        if defaults.object(forKey: todoistTokenKey) == nil {
+            defaults.set("", forKey: todoistTokenKey)
         }
     }
     
@@ -149,6 +161,30 @@ class SettingsManager {
 
     func setBannerHeight(_ h: Double) {
         defaults.set(h, forKey: bannerHeightKey)
+    }
+
+    func isCalendarEnabled() -> Bool {
+        return defaults.bool(forKey: isCalendarEnabledKey)
+    }
+    
+    func setCalendarEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: isCalendarEnabledKey)
+    }
+    
+    func isTodoistEnabled() -> Bool {
+        return defaults.bool(forKey: isTodoistEnabledKey)
+    }
+    
+    func setTodoistEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: isTodoistEnabledKey)
+    }
+    
+    func todoistToken() -> String {
+        return defaults.string(forKey: todoistTokenKey) ?? ""
+    }
+    
+    func setTodoistToken(_ token: String) {
+        defaults.set(token, forKey: todoistTokenKey)
     }
 }
 
