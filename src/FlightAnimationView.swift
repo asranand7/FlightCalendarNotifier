@@ -135,6 +135,46 @@ struct FlightAnimationView: View {
             bundleImage("rocket", width: 44, height: 44, flipHorizontal: false)
                 .rotationEffect(.degrees(90)) // rockets point up; rotate to fly right
                 .offset(y: bobOffset)
+        case "snoopy":
+            bundleImage("snoopy", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "bluecat":
+            bundleImage("bluecat", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "goldendog":
+            bundleImage("goldendog", width: 56, height: 56)
+                .offset(y: bobOffset)
+        case "elephant":
+            bundleImage("elephant", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "penguin":
+            bundleImage("penguin", width: 52, height: 52, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "dragon":
+            bundleImage("dragon", width: 60, height: 60, flipHorizontal: false)
+                .offset(y: bobOffset)
+                .rotationEffect(.degrees(pitchAngle * 0.3))
+        case "unicorn":
+            bundleImage("unicorn", width: 60, height: 60)
+                .offset(y: bobOffset)
+        case "superhero":
+            bundleImage("superhero", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+                .rotationEffect(.degrees(pitchAngle * 0.4))
+        case "superman":
+            bundleImage("superman", width: 60, height: 60, flipHorizontal: false)
+                .rotationEffect(.degrees(pitchAngle * 0.3))
+                .offset(y: bobOffset)
+        case "webslinger":
+            bundleImage("webslinger", width: 58, height: 58, flipHorizontal: false)
+                .rotationEffect(.degrees(pitchAngle * 0.5))
+                .offset(y: bobOffset)
+        case "cartman":
+            bundleImage("cartman", width: 64, height: 64, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "rickshaw":
+            bundleImage("rickshaw", width: 68, height: 68, flipHorizontal: false)
+                .offset(y: bobOffset)
         case "dinosaur":
             Text("🦕")
                 .font(.system(size: 32))
@@ -184,7 +224,8 @@ struct FlightAnimationView: View {
 
     private func startThemeAnimation() {
         switch animationThemeName {
-        case "f1car", "motorbike", "locomotive", "dinosaur":
+        case "f1car", "motorbike", "locomotive", "dinosaur",
+             "snoopy", "bluecat", "goldendog", "elephant", "penguin", "unicorn", "cartman", "rickshaw":
             withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 bobOffset = 5.0
             }
@@ -197,6 +238,24 @@ struct FlightAnimationView: View {
         case "rocket":
             withAnimation(Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 bobOffset = 6.0
+            }
+        case "dragon", "superhero":
+            // flying creatures — bob + gentle pitch
+            withAnimation(Animation.easeInOut(duration: 1.3).repeatForever(autoreverses: true)) {
+                bobOffset = 5.0
+                pitchAngle = 5.0
+            }
+        case "superman":
+            // superman flying — smooth glide with slight pitch
+            withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                bobOffset = 4.0
+                pitchAngle = 4.0
+            }
+        case "webslinger":
+            // spidey swinging — wider bob + swing rotation
+            withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                bobOffset = 8.0
+                pitchAngle = 8.0
             }
         case "custom_image":
             withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {

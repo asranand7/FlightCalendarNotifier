@@ -432,6 +432,18 @@ struct SetupView: View {
                     themeButton(key: "locomotive", label: "Train") { themePreviewImage("locomotive", fallback: "🚂") }
                     themeButton(key: "helicopter", label: "Heli") { themePreviewImage("helicopter", fallback: "🚁") }
                     themeButton(key: "rocket", label: "Rocket") { themePreviewImage("rocket", fallback: "🚀") }
+                    themeButton(key: "snoopy", label: "Snoopy") { themePreviewImage("snoopy", fallback: "🐕") }
+                    themeButton(key: "bluecat", label: "Blue Cat") { themePreviewImage("bluecat", fallback: "🐱") }
+                    themeButton(key: "goldendog", label: "Doggo") { themePreviewImage("goldendog", fallback: "🐶") }
+                    themeButton(key: "elephant", label: "Elephant") { themePreviewImage("elephant", fallback: "🐘") }
+                    themeButton(key: "penguin", label: "Penguin") { themePreviewImage("penguin", fallback: "🐧") }
+                    themeButton(key: "dragon", label: "Dragon") { themePreviewImage("dragon", fallback: "🐉") }
+                    themeButton(key: "unicorn", label: "Unicorn") { themePreviewImage("unicorn", fallback: "🦄") }
+                    themeButton(key: "superhero", label: "Hero") { themePreviewImage("superhero", fallback: "🦸") }
+                    themeButton(key: "superman", label: "Superman") { themePreviewImage("superman", fallback: "🦸‍♂️") }
+                    themeButton(key: "webslinger", label: "Spidey") { themePreviewImage("webslinger", fallback: "🕷️") }
+                    themeButton(key: "cartman", label: "Cart") { themePreviewImage("cartman", fallback: "🛒") }
+                    themeButton(key: "rickshaw", label: "Rickshaw") { themePreviewImage("rickshaw", fallback: "🛺") }
                     themeButton(key: "dinosaur", label: "Dino") { Text("🦕").font(.system(size: 28)) }
                     themeButton(key: "emoji:\(customEmoji)", label: "Emoji") { Text("✏️").font(.system(size: 24)) }
                     customImageTile()
