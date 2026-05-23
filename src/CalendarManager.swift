@@ -100,7 +100,7 @@ class CalendarManager {
     func fetchUpcomingEvents(completion: @escaping ([CalendarEvent]) -> Void) {
         guard isCalendarAuthorized() else { completion([]); return }
         let now = Date()
-        let predicate = eventStore.predicateForEvents(withStart: now, end: now.addingTimeInterval(45 * 60), calendars: nil)
+        let predicate = eventStore.predicateForEvents(withStart: now.addingTimeInterval(-5 * 60), end: now.addingTimeInterval(45 * 60), calendars: nil)
         let result = eventStore.events(matching: predicate)
             .filter { !$0.isAllDay && !isDeclined($0) }
             .map { mapEvent($0) }

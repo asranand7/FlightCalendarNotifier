@@ -39,6 +39,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isReleasedWhenClosed = false
+        // Observe window close to hide dock icon
+        NotificationCenter.default.addObserver(self, selector: #selector(windowDidClose), name: NSWindow.willCloseNotification, object: nil)
         window.contentView = NSHostingView(rootView: SetupView(
             calendarManager: calendarManager,
             settingsManager: settingsManager,
@@ -201,6 +203,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    @objc func windowDidClose(_ notification: Notification) {
+        guard let closedWindow = notification.object as? NSWindow, closedWindow === window else { return }
+        // Hide dock icon when settings window is closed — app lives in menu bar only
+        NSApp.setActivationPolicy(.accessory)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // When the user opens Flyby from Spotlight/Finder while it's already running
+        if !flag {
+            openSettings()
+        }
+        return true
+    }
+
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
     }
@@ -303,6 +319,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                     self.showFlightAnimation(
                                         meetingTitle: event.title,
                                         minutesRemaining: threshold,
+                                        startDate: event.startDate,
+                                        endDate: event.endDate,
+                                        platform: event.platform,
+                                        meetingUrl: event.url
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // "You're Late!" check: event started 2-5 min ago with no late notification yet
+                        if diffInSeconds < 0 && diffInSeconds >= -300 {
+                            let lateMinutes = Int(round(-diffInSeconds / 60.0))
+                            if lateMinutes >= 2 {
+                                var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
+                                if !triggeredSet.contains(-1) { // -1 is the sentinel for "late" notification
+                                    print("🚨 YOU'RE LATE! Event [\(event.title)] started \(lateMinutes)m ago!")
+                                    triggeredSet.insert(-1)
+                                    self.triggeredEvents[eventId] = triggeredSet
+                                    self.showFlightAnimation(
+                                        meetingTitle: event.title,
+                                        minutesRemaining: 0,
                                         startDate: event.startDate,
                                         endDate: event.endDate,
                                         platform: event.platform,
@@ -483,6 +520,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func showFlightAnimation(meetingTitle: String, minutesRemaining: Int, startDate: Date?, endDate: Date?, platform: String?, meetingUrl: String?) {
         print("🎬 showFlightAnimation triggered! Title: '\(meetingTitle)', minutesRemaining: \(minutesRemaining)")
+        
+        // Play notification sound if enabled
+        if settingsManager.isSoundEnabled() {
+            let soundName = settingsManager.soundType()
+            if let sound = NSSound(named: NSSound.Name(soundName)) {
+                sound.play()
+                print("🔊 Playing sound: \(soundName)")
+            }
+        }
         // Detect active screen (screen containing the mouse cursor)
         let mouseLocation = NSEvent.mouseLocation
         let targetScreen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }

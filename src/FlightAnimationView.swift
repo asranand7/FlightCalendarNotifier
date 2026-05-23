@@ -245,6 +245,31 @@ struct BannerView: View {
     
     private var isTodoist: Bool { platform?.lowercased().contains("todoist") == true }
 
+    private var urgencyLabel: String {
+        if minutes <= 0 { return isTodoist ? "OVERDUE" : "YOU'RE LATE" }
+        if minutes <= 2 { return isTodoist ? "DUE NOW" : "STARTING NOW" }
+        if minutes <= 10 { return isTodoist ? "DUE SOON" : "STARTING SOON" }
+        return isTodoist ? "COMING UP" : "COMING UP"
+    }
+
+    private var urgencyBadgeColor: Color {
+        if minutes <= 0 { return Color(red: 0.8, green: 0.1, blue: 0.1) }
+        if minutes <= 2 { return Color.red }
+        if minutes <= 10 { return Color.orange }
+        return Color(red: 0.3, green: 0.5, blue: 0.9)
+    }
+
+    private var durationString: String? {
+        guard let start = startDate, let end = endDate else { return nil }
+        let mins = Int(round(end.timeIntervalSince(start) / 60.0))
+        if mins >= 60 {
+            let h = mins / 60
+            let m = mins % 60
+            return m > 0 ? "\(h)h \(m)m" : "\(h)h"
+        }
+        return "\(mins)m"
+    }
+
     private var platformIcon: String {
         guard let plat = platform?.lowercased() else { return "calendar" }
         if plat.contains("meet") { return "video" }
@@ -290,18 +315,18 @@ struct BannerView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     // Highlighted Countdown Badge & Header
                     HStack(spacing: 6) {
-                        Text("\(minutes) MINS")
+                        Text(minutes <= 0 ? "NOW" : "\(minutes) MINS")
                             .font(.system(size: 9, weight: .black))
-                            .foregroundColor(.white) // High contrast white text
+                            .foregroundColor(.white)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2.5)
-                            .background(Color.red) // Vibrant red badge
+                            .background(urgencyBadgeColor)
                             .cornerRadius(4)
-                            .shadow(color: Color.red.opacity(0.2), radius: 2)
+                            .shadow(color: urgencyBadgeColor.opacity(0.3), radius: 2)
                         
-                        Text("STARTING SOON")
+                        Text(urgencyLabel)
                             .font(.system(size: 8.5, weight: .black))
                             .foregroundColor(textColor.opacity(0.6))
                             .tracking(1.0)
@@ -318,11 +343,19 @@ struct BannerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     if startDate != nil {
-                        Text(timeRangeString)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(textColor.opacity(0.75))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                        HStack(spacing: 6) {
+                            Text(timeRangeString)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(textColor.opacity(0.75))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                            if let dur = durationString {
+                                Text("(\(dur))")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(textColor.opacity(0.45))
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
                     }
                 }
                 .padding(.leading, 16)

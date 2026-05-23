@@ -21,6 +21,8 @@ class SettingsManager {
     private let customImagePathKey = "custom_image_path"
     private let lastTodoistSyncKey = "last_todoist_sync"
     private let todoistSyncIntervalKey = "todoist_sync_interval"
+    private let soundEnabledKey = "sound_enabled"
+    private let soundTypeKey = "sound_type"
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -88,6 +90,12 @@ class SettingsManager {
         }
         if defaults.object(forKey: todoistTokenKey) == nil {
             defaults.set("", forKey: todoistTokenKey)
+        }
+        if defaults.object(forKey: soundEnabledKey) == nil {
+            defaults.set(true, forKey: soundEnabledKey)
+        }
+        if defaults.object(forKey: soundTypeKey) == nil {
+            defaults.set("Glass", forKey: soundTypeKey)
         }
     }
     
@@ -214,6 +222,22 @@ class SettingsManager {
     
     func setTodoistToken(_ token: String) {
         defaults.set(token, forKey: todoistTokenKey)
+    }
+
+    func isSoundEnabled() -> Bool {
+        return defaults.bool(forKey: soundEnabledKey)
+    }
+
+    func setSoundEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: soundEnabledKey)
+    }
+
+    func soundType() -> String {
+        return defaults.string(forKey: soundTypeKey) ?? "Glass"
+    }
+
+    func setSoundType(_ type: String) {
+        defaults.set(type, forKey: soundTypeKey)
     }
 
     func customImagePath() -> String? {

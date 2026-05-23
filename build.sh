@@ -33,8 +33,6 @@ cp Info.plist "${CONTENTS_DIR}/Info.plist"
 
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 mkdir -p "$RESOURCES_DIR"
-cp fetch_calendar.py "${RESOURCES_DIR}/"
-chmod +x "${RESOURCES_DIR}/fetch_calendar.py"
 if [ -f AppIcon.icns ]; then
   cp AppIcon.icns "${RESOURCES_DIR}/"
 fi

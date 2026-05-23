@@ -26,7 +26,7 @@ struct SetupView: View {
     let onTestFlight: (String?) -> Void
     let onSyncTodoist: (@escaping (Int?, Error?) -> Void) -> Void
 
-    @State private var selection: SettingsSection? = .reminders
+    @State private var selection: SettingsSection? = .general
 
     @State private var launchAtLogin: Bool = false
     @State private var calendarStatus: String = "Checking..."
@@ -54,6 +54,8 @@ struct SetupView: View {
     @State private var lastSyncResult: String = ""
     @State private var lastAutoSync: Date? = nil
     @State private var todoistSyncInterval: Int = 300
+    @State private var isSoundEnabled: Bool = true
+    @State private var selectedSoundType: String = "Glass"
 
     private let syncIntervalOptions: [(label: String, seconds: Int)] = [
         ("1 min",  60),
@@ -67,6 +69,7 @@ struct SetupView: View {
     @State private var isEditingToken: Bool = false
 
     private let thresholdOptions = [1, 2, 5, 10, 15, 30]
+    private let soundTypeOptions = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"]
     private let bgPresets: [(String, String)] = [
         ("#20222C", "Dark"), ("#F8F8F8", "Light"), ("#FFC0CB", "Pink"),
         ("#FFB300", "Amber"), ("#0F1E4B", "Blue"), ("#2ECC71", "Green")
@@ -138,7 +141,7 @@ struct SetupView: View {
             glassCard(title: "About") {
                 infoRow("Application", "Flyby")
                 infoRow("Tagline", "Animated Meeting Reminders")
-                infoRow("Version", "0.0.4")
+                infoRow("Version", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")
             }
         }
     }
@@ -246,6 +249,37 @@ struct SetupView: View {
                     }
                 }
             }
+
+            glassCard(title: "Sound", footer: "Play a system sound when a reminder banner flies across the screen.") {
+                Toggle("Enable Sound", isOn: $isSoundEnabled)
+                    .onChange(of: isSoundEnabled) { settingsManager.setSoundEnabled(isSoundEnabled) }
+                if isSoundEnabled {
+                    Divider().opacity(0.4)
+                    HStack {
+                        Text("Sound Type")
+                        Spacer()
+                        Picker("", selection: $selectedSoundType) {
+                            ForEach(soundTypeOptions, id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                        .onChange(of: selectedSoundType) {
+                            settingsManager.setSoundType(selectedSoundType)
+                        }
+                        Button {
+                            if let sound = NSSound(named: NSSound.Name(selectedSoundType)) {
+                                sound.play()
+                            }
+                        } label: {
+                            Image(systemName: "speaker.wave.2.fill")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: isSoundEnabled)
         }
         .animation(.smooth(duration: 0.3), value: isCalendarEnabled)
         .animation(.smooth(duration: 0.3), value: isTodoistEnabled)
@@ -793,6 +827,8 @@ struct SetupView: View {
         isEditingToken = !hasToken
 
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        isSoundEnabled = settingsManager.isSoundEnabled()
+        selectedSoundType = settingsManager.soundType()
         checkPermission()
     }
 
