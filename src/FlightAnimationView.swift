@@ -51,7 +51,7 @@ struct FlightAnimationView: View {
         ZStack(alignment: .leading) {
             Color.clear
             
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 // Boarding pass / Banner
                 BannerView(
                     title: eventTitle,
@@ -66,19 +66,22 @@ struct FlightAnimationView: View {
                     height: cardHeight,
                     onClose: onClose
                 )
-                
-                // Tow line / Vapor trail
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: 15))
-                    path.addLine(to: CGPoint(x: 35, y: 15))
+
+                // Tow rope — thicker, more visible, slightly angled
+                Canvas { ctx, size in
+                    var path = Path()
+                    path.move(to: CGPoint(x: 0, y: size.height * 0.42))
+                    path.addLine(to: CGPoint(x: size.width, y: size.height * 0.5))
+                    ctx.stroke(path,
+                               with: .color(.white.opacity(0.75)),
+                               style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [6, 4]))
                 }
-                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                .foregroundColor(Color.white.opacity(0.4))
-                .frame(width: 35, height: 30)
-                
+                .frame(width: 44, height: 30)
+
                 // Animated subject (theme-driven)
                 themeSubject()
             }
+            .rotationEffect(.degrees(-1.5))
             .offset(x: 10)
             .onHover { hovering in
                 if hovering {
@@ -146,9 +149,9 @@ struct FlightAnimationView: View {
                     .offset(y: bobOffset)
             } else {
                 // airplane (default)
-                bundleImage("airplane", width: 48, height: 48, flipHorizontal: false)
+                bundleImage("airplane", width: 66, height: 66, flipHorizontal: false)
                     .rotationEffect(.degrees(pitchAngle))
-                    .offset(y: pitchAngle > 0 ? 2 : -2)
+                    .offset(y: pitchAngle > 0 ? 3 : -3)
             }
         }
     }
@@ -208,7 +211,7 @@ struct FlightAnimationView: View {
             } else {
                 // airplane — pitch oscillation
                 withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                    pitchAngle = 5.0
+                    pitchAngle = 8.0
                 }
             }
         }
@@ -309,6 +312,7 @@ struct BannerView: View {
                     
                     Text(title.uppercased())
                         .font(.system(size: 14.5, weight: .bold))
+                        .italic()
                         .foregroundColor(textColor)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
