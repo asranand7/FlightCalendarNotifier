@@ -424,7 +424,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else if let tasks = tasks {
                 print("✅ Todoist cache updated: found \(tasks.count) timed tasks")
                 self.cachedTodoistTasks = tasks
-                DispatchQueue.main.async { completion?(tasks.count, nil) }
+                self.settingsManager.setLastTodoistSync(Date())
+                DispatchQueue.main.async {
+                    completion?(tasks.count, nil)
+                    NotificationCenter.default.post(name: Notification.Name("TodoistSyncCompleted"), object: nil)
+                }
             }
         }
     }

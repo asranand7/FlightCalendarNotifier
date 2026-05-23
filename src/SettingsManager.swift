@@ -19,6 +19,7 @@ class SettingsManager {
     private let isTodoistEnabledKey = "is_todoist_enabled"
     private let todoistTokenKey = "todoist_token"
     private let customImagePathKey = "custom_image_path"
+    private let lastTodoistSyncKey = "last_todoist_sync"
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -216,6 +217,14 @@ class SettingsManager {
 
     func customImagePath() -> String? {
         return defaults.string(forKey: customImagePathKey)
+    }
+
+    func lastTodoistSync() -> Date? {
+        return defaults.object(forKey: lastTodoistSyncKey) as? Date
+    }
+
+    func setLastTodoistSync(_ date: Date) {
+        defaults.set(date, forKey: lastTodoistSyncKey)
     }
 
     func setCustomImagePath(_ path: String?) {

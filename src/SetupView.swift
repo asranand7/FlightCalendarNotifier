@@ -52,6 +52,7 @@ struct SetupView: View {
     @State private var isVerifyingTodoist: Bool = false
     @State private var isSyncingTodoist: Bool = false
     @State private var lastSyncResult: String = ""
+    @State private var lastAutoSync: Date? = nil
     @State private var verifyManager: TodoistManager? = nil
     @State private var isEditingToken: Bool = false
 
@@ -92,7 +93,13 @@ struct SetupView: View {
                 }
         }
         .frame(minWidth: 720, idealWidth: 780, minHeight: 540, idealHeight: 600)
-        .onAppear(perform: loadSettings)
+        .onAppear {
+            loadSettings()
+            NotificationCenter.default.addObserver(forName: Notification.Name("TodoistSyncCompleted"),
+                                                   object: nil, queue: .main) { _ in
+                lastAutoSync = settingsManager.lastTodoistSync()
+            }
+        }
     }
 
     // MARK: - Detail panes
@@ -255,7 +262,18 @@ struct SetupView: View {
             }
 
             HStack {
-                Text("Tasks")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Last Synced")
+                    if let date = lastAutoSync {
+                        Text(date, style: .relative)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Never")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 if isSyncingTodoist {
                     ProgressView().controlSize(.small)
@@ -733,6 +751,7 @@ struct SetupView: View {
         selectedPosition = settingsManager.bannerPosition()
         customImagePath = settingsManager.customImagePath()
 
+        lastAutoSync = settingsManager.lastTodoistSync()
         isCalendarEnabled = settingsManager.isCalendarEnabled()
         isTodoistEnabled = settingsManager.isTodoistEnabled()
         calendarThresholds = Set(settingsManager.calendarThresholds())
