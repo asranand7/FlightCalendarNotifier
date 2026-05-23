@@ -7,20 +7,25 @@ struct SetupView: View {
     
     @State private var calendarStatus: String = "Checking..."
     @State private var isAuthorized: Bool = false
-    @State private var selectedColor: String = "white"
-    @State private var selectedSize: String = "medium"
+    @State private var bannerWidth: Double = 230.0
+    @State private var bannerHeight: Double = 76.0
     @State private var selectedSpeed: String = "medium"
-    @State private var selectedBg: String = "dark"
-    @State private var selectedText: String = "white"
+    @State private var selectedBg: String = "#20222C"
+    @State private var selectedText: String = "#FFFFFF"
+    @State private var selectedTheme: String = "airplane"
+    @State private var customEmoji: String = ""
+    @State private var selectedPosition: String = "top"
+    @State private var customBgColor: Color = Color(hex: "#20222C")
+    @State private var customTextColor: Color = Color(hex: "#FFFFFF")
     
     var body: some View {
         VStack(spacing: 14) {
             // Header
             VStack(spacing: 3) {
-                Text("🛫 Flight Notifier Setup")
+                Text("✨ Flyby")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
-                Text("Calendar Meeting Overlay")
+                Text("Animated Meeting Reminders")
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.6))
             }
@@ -40,6 +45,11 @@ struct SetupView: View {
                     Text(calendarStatus)
                         .font(.system(size: 11.5, weight: .bold))
                         .foregroundColor(isAuthorized ? .green : .orange)
+                        .onTapGesture {
+                            if !isAuthorized {
+                                requestPermission()
+                            }
+                        }
                 }
             }
             .padding(10)
@@ -56,57 +66,91 @@ struct SetupView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
                 
-                // Color selector
-                HStack {
-                    Text("Airplane Color:")
+                // Theme selector
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Animation Theme:")
                         .font(.system(size: 11.5))
                         .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    HStack(spacing: 8) {
-                        ForEach(["white", "blue", "amber", "green"], id: \.self) { colorName in
-                            Button(action: {
-                                selectedColor = colorName
-                                settingsManager.setAirplaneColor(colorName)
-                            }) {
-                                Circle()
-                                    .fill(colorValue(for: colorName))
-                                    .frame(width: 16, height: 16)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: selectedColor == colorName ? 2.5 : 0)
-                                    )
-                                    .shadow(color: colorValue(for: colorName).opacity(0.3), radius: 2)
-                            }
-                            .buttonStyle(.plain)
+                    // Row 1
+                    HStack(spacing: 10) {
+                        themeButton(key: "airplane", label: "Plane") {
+                            themePreviewImage("airplane", fallback: "✈️")
+                        }
+                        themeButton(key: "f1car", label: "F1 Car") {
+                            themePreviewImage("f1car", fallback: "🏎️")
+                        }
+                        themeButton(key: "motorbike", label: "Moto") {
+                            themePreviewImage("motorbike", fallback: "🏍️")
+                        }
+                        themeButton(key: "locomotive", label: "Train") {
+                            themePreviewImage("locomotive", fallback: "🚂")
+                        }
+                    }
+                    // Row 2
+                    HStack(spacing: 10) {
+                        themeButton(key: "helicopter", label: "Heli") {
+                            themePreviewImage("helicopter", fallback: "🚁")
+                        }
+                        themeButton(key: "rocket", label: "Rocket") {
+                            themePreviewImage("rocket", fallback: "🚀")
+                        }
+                        themeButton(key: "dinosaur", label: "Dino") {
+                            Text("🦕").font(.system(size: 28))
+                        }
+                        themeButton(key: "emoji:\(customEmoji)", label: "Custom") {
+                            Text("✏️").font(.system(size: 24))
+                        }
+                    }
+
+                    if selectedTheme.hasPrefix("emoji:") {
+                        HStack(spacing: 6) {
+                            TextField("Paste emoji", text: $customEmoji)
+                                .font(.system(size: 20))
+                                .frame(width: 50)
+                                .onChange(of: customEmoji) { newVal in
+                                    let trimmed = String(newVal.prefix(1))
+                                    if trimmed != newVal { customEmoji = trimmed }
+                                    let theme = "emoji:\(trimmed)"
+                                    selectedTheme = theme
+                                    settingsManager.setAnimationTheme(theme)
+                                }
+                            Text("← type any single emoji")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.4))
                         }
                     }
                 }
-                
-                Divider().background(Color.white.opacity(0.05))
-                
-                // Size selector
-                HStack {
-                    Text("Notification Width:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    HStack(spacing: 5) {
-                        ForEach(["small", "medium", "large"], id: \.self) { sizeName in
-                            Button(action: {
-                                selectedSize = sizeName
-                                settingsManager.setBannerSize(sizeName)
-                            }) {
-                                Text(sizeName.capitalized)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(selectedSize == sizeName ? .black : .white.opacity(0.7))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(selectedSize == sizeName ? Color.amber : Color.white.opacity(0.06))
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                       Divider().background(Color.white.opacity(0.05))
+
+                // Dimension Sliders
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Banner Width:")
+                            .font(.system(size: 11.5))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        Text("\(Int(bannerWidth)) px")
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
                     }
+                    Slider(value: $bannerWidth, in: 160...400, step: 5)
+                        .onChange(of: bannerWidth) {
+                            settingsManager.setBannerWidth(bannerWidth)
+                        }
+                    
+                    HStack {
+                        Text("Banner Height:")
+                            .font(.system(size: 11.5))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        Text("\(Int(bannerHeight)) px")
+                            .font(.system(size: 11.5, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                    Slider(value: $bannerHeight, in: 50...120, step: 2)
+                        .onChange(of: bannerHeight) {
+                            settingsManager.setBannerHeight(bannerHeight)
+                        }
                 }
                 
                 Divider().background(Color.white.opacity(0.05))
@@ -137,25 +181,71 @@ struct SetupView: View {
                 }
                 
                 Divider().background(Color.white.opacity(0.05))
-                
-                // Card Background selector (Solid options)
+
+                // Banner position selector
                 HStack {
-                    Text("Card Background:")
+                    Text("Banner Position:")
                         .font(.system(size: 11.5))
                         .foregroundColor(.white.opacity(0.7))
                     Spacer()
                     HStack(spacing: 5) {
-                        ForEach(["dark", "light", "blue", "black"], id: \.self) { bgName in
+                        ForEach([("top", "▲ Top"), ("middle", "● Middle"), ("bottom", "▼ Bottom")], id: \.0) { (pos, label) in
                             Button(action: {
-                                selectedBg = bgName
-                                settingsManager.setCardBackground(bgName)
+                                selectedPosition = pos
+                                settingsManager.setBannerPosition(pos)
                             }) {
-                                Text(bgName.uppercased())
-                                    .font(.system(size: 9.5, weight: .bold))
-                                    .foregroundColor(selectedBg == bgName ? .black : .white.opacity(0.7))
+                                Text(label)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(selectedPosition == pos ? .black : .white.opacity(0.7))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(selectedBg == bgName ? Color.amber : Color.white.opacity(0.06))
+                                    .background(selectedPosition == pos ? Color.amber : Color.white.opacity(0.06))
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Divider().background(Color.white.opacity(0.05))
+
+                // Card Background selector (Solid options + ColorPicker)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Card Background:")
+                            .font(.system(size: 11.5))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        ColorPicker("", selection: $customBgColor)
+                            .labelsHidden()
+                            .onChange(of: customBgColor) {
+                                if let hex = customBgColor.toHex() {
+                                    selectedBg = hex
+                                    settingsManager.setCardBackground(hex)
+                                }
+                            }
+                    }
+                    
+                    HStack(spacing: 5) {
+                        ForEach([
+                            ("#20222C", "DARK"),
+                            ("#F8F8F8", "LIGHT"),
+                            ("#FFC0CB", "PINK"),
+                            ("#FFB300", "AMBER"),
+                            ("#0F1E4B", "BLUE"),
+                            ("#2ECC71", "GREEN")
+                        ], id: \.0) { (hex, label) in
+                            Button(action: {
+                                selectedBg = hex
+                                customBgColor = Color(hex: hex)
+                                settingsManager.setCardBackground(hex)
+                            }) {
+                                Text(label)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(selectedBg == hex ? .black : .white.opacity(0.7))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(selectedBg == hex ? Color.amber : Color.white.opacity(0.06))
                                     .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
@@ -165,24 +255,42 @@ struct SetupView: View {
                 
                 Divider().background(Color.white.opacity(0.05))
                 
-                // Text Color selector
-                HStack {
-                    Text("Text Color:")
-                        .font(.system(size: 11.5))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
+                // Text Color selector (Solid options + ColorPicker)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Text Color:")
+                            .font(.system(size: 11.5))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        ColorPicker("", selection: $customTextColor)
+                            .labelsHidden()
+                            .onChange(of: customTextColor) {
+                                if let hex = customTextColor.toHex() {
+                                    selectedText = hex
+                                    settingsManager.setTextColor(hex)
+                                }
+                            }
+                    }
+                    
                     HStack(spacing: 5) {
-                        ForEach(["white", "black", "yellow", "amber"], id: \.self) { textColorName in
+                        ForEach([
+                            ("#FFFFFF", "WHITE"),
+                            ("#000000", "BLACK"),
+                            ("#FFEB3B", "YELLOW"),
+                            ("#FFB300", "AMBER"),
+                            ("#FFC0CB", "PINK")
+                        ], id: \.0) { (hex, label) in
                             Button(action: {
-                                selectedText = textColorName
-                                settingsManager.setTextColor(textColorName)
+                                selectedText = hex
+                                customTextColor = Color(hex: hex)
+                                settingsManager.setTextColor(hex)
                             }) {
-                                Text(textColorName.uppercased())
-                                    .font(.system(size: 9.5, weight: .bold))
-                                    .foregroundColor(selectedText == textColorName ? .black : .white.opacity(0.7))
+                                Text(label)
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(selectedText == hex ? .black : .white.opacity(0.7))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(selectedText == textColorName ? Color.amber : Color.white.opacity(0.06))
+                                    .background(selectedText == hex ? Color.amber : Color.white.opacity(0.06))
                                     .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
@@ -201,9 +309,9 @@ struct SetupView: View {
             // Test Button
             Button(action: onTestFlight) {
                 HStack(spacing: 6) {
-                    Image(systemName: "airplane")
+                    Image(systemName: "play.fill")
                         .font(.system(size: 12, weight: .bold))
-                    Text("Test Flight Animation Now")
+                    Text("Test Animation")
                         .font(.system(size: 11.5, weight: .semibold))
                 }
                 .foregroundColor(.black)
@@ -226,37 +334,76 @@ struct SetupView: View {
                 .padding(.bottom, 4)
         }
         .padding(14)
-        .frame(width: 400, height: 540)
+        .frame(width: 400, height: 720)
         .background(Color(red: 25/255, green: 25/255, blue: 35/255))
         .onAppear {
-            selectedColor = settingsManager.airplaneColor()
-            selectedSize = settingsManager.bannerSize()
+            bannerWidth = settingsManager.bannerWidth()
+            bannerHeight = settingsManager.bannerHeight()
             selectedSpeed = settingsManager.flightSpeed()
             selectedBg = settingsManager.cardBackground()
             selectedText = settingsManager.textColor()
+            customBgColor = Color(hex: selectedBg)
+            customTextColor = Color(hex: selectedText)
+            let theme = settingsManager.animationTheme()
+            selectedTheme = theme
+            if theme.hasPrefix("emoji:") {
+                customEmoji = String(theme.dropFirst(6))
+            }
+            selectedPosition = settingsManager.bannerPosition()
             checkPermission()
         }
     }
     
-    func colorValue(for name: String) -> Color {
-        switch name {
-        case "blue": return Color(red: 0/255, green: 150/255, blue: 255/255)
-        case "amber": return Color.amber
-        case "green": return Color(red: 46/255, green: 204/255, blue: 113/255)
-        default: return .white
+    @ViewBuilder
+    func themePreviewImage(_ name: String, fallback: String) -> some View {
+        if let path = Bundle.main.path(forResource: name, ofType: "png"),
+           let img = NSImage(contentsOfFile: path) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 34, height: 34)
+        } else {
+            Text(fallback).font(.system(size: 26))
         }
     }
-    
-    func checkPermission() {
-        calendarManager.fetchUpcomingEvents { events in
-            DispatchQueue.main.async {
-                isAuthorized = true
-                calendarStatus = "Granted (via Python)"
+
+    @ViewBuilder
+    func themeButton<Content: View>(key: String, label: String, @ViewBuilder content: () -> Content) -> some View {
+        let isSelected = selectedTheme == key || (key.hasPrefix("emoji:") && selectedTheme.hasPrefix("emoji:"))
+        Button(action: {
+            selectedTheme = key
+            settingsManager.setAnimationTheme(key)
+        }) {
+            VStack(spacing: 4) {
+                content()
+                    .frame(width: 40, height: 40)
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(isSelected ? .black : .white.opacity(0.6))
             }
+            .padding(6)
+            .background(isSelected ? Color.amber.opacity(0.9) : Color.white.opacity(0.06))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.amber : Color.clear, lineWidth: 1.5)
+            )
         }
+        .buttonStyle(.plain)
+    }
+
+    func checkPermission() {
+        let authorized = calendarManager.isCalendarAuthorized()
+        isAuthorized = authorized
+        calendarStatus = authorized ? "Granted" : "Denied / Tap to Request"
     }
     
     func requestPermission() {
-        checkPermission()
+        calendarManager.requestAccess { granted in
+            DispatchQueue.main.async {
+                isAuthorized = granted
+                calendarStatus = granted ? "Granted" : "Denied"
+            }
+        }
     }
 }

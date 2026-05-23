@@ -4,8 +4,8 @@ struct FlightAnimationView: View {
     let eventTitle: String
     let minutesRemaining: Int
     let screenWidth: CGFloat
-    let airplaneColorName: String
-    let bannerSizeName: String
+    let bannerWidth: CGFloat
+    let bannerHeight: CGFloat
     let flightSpeedName: String
     let cardBgName: String
     let fontColorName: String
@@ -16,36 +16,27 @@ struct FlightAnimationView: View {
     let platform: String?
     let meetingUrl: String?
     
+    let animationThemeName: String
+
     let onClose: () -> Void
     let onHoverEnter: () -> Void
     let onHoverExit: () -> Void
     
-    @State private var bobOffset: CGFloat = -6.0
     @State private var pitchAngle: Double = -5.0
-    
-    private var planeColor: Color {
-        switch airplaneColorName.lowercased() {
-        case "blue": return Color(red: 0/255, green: 150/255, blue: 255/255)
-        case "amber": return Color.amber
-        case "green": return Color(red: 46/255, green: 204/255, blue: 113/255)
-        default: return .white
-        }
-    }
+    @State private var bobOffset: CGFloat = -4.0
+    @State private var spinAngle: Double = 0.0
+    @State private var scaleVal: CGFloat = 0.9
     
     private var cardWidth: CGFloat {
-        switch bannerSizeName.lowercased() {
-        case "small": return 160
-        case "large": return 300
-        default: return 230
-        }
+        return bannerWidth
+    }
+
+    private var cardHeight: CGFloat {
+        return bannerHeight
     }
     
     private var startOffset: CGFloat {
-        switch bannerSizeName.lowercased() {
-        case "small": return 350
-        case "large": return 550
-        default: return 450
-        }
+        return bannerWidth + 220.0
     }
     
     private var flightDuration: Double {
@@ -72,6 +63,7 @@ struct FlightAnimationView: View {
                     cardBgName: cardBgName,
                     fontColorName: fontColorName,
                     width: cardWidth,
+                    height: cardHeight,
                     onClose: onClose
                 )
                 
@@ -81,22 +73,13 @@ struct FlightAnimationView: View {
                     path.addLine(to: CGPoint(x: 35, y: 15))
                 }
                 .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                .foregroundColor(planeColor.opacity(0.6))
+                .foregroundColor(Color.white.opacity(0.4))
                 .frame(width: 35, height: 30)
                 
-                // Airplane
-                Image(systemName: "airplane")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
-                    .foregroundColor(planeColor)
-                    .rotationEffect(.degrees(pitchAngle))
-                    .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                // Animated subject (theme-driven)
+                themeSubject()
             }
-            .offset(
-                x: 10,
-                y: bobOffset
-            )
+            .offset(x: 10)
             .onHover { hovering in
                 if hovering {
                     onHoverEnter()
@@ -107,9 +90,93 @@ struct FlightAnimationView: View {
         }
         .frame(maxHeight: .infinity)
         .onAppear {
+            startThemeAnimation()
+        }
+    }
+
+    private func loadBundleImage(_ name: String) -> NSImage? {
+        guard let path = Bundle.main.path(forResource: name, ofType: "png") else { return nil }
+        return NSImage(contentsOfFile: path)
+    }
+
+    // Renders a bundled PNG. flipHorizontal mirrors the image to face right (direction of travel).
+    @ViewBuilder
+    private func bundleImage(_ name: String, width: CGFloat, height: CGFloat, flipHorizontal: Bool = true) -> some View {
+        if let img = loadBundleImage(name) {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: width, height: height)
+                .scaleEffect(x: flipHorizontal ? -1 : 1, y: 1)
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+        }
+    }
+
+    @ViewBuilder
+    private func themeSubject() -> some View {
+        switch animationThemeName {
+        case "f1car":
+            bundleImage("f1car", width: 54, height: 54)
+                .offset(y: bobOffset)
+        case "motorbike":
+            bundleImage("motorbike", width: 52, height: 52)
+                .offset(y: bobOffset)
+        case "locomotive":
+            bundleImage("locomotive", width: 52, height: 52)
+                .offset(y: bobOffset)
+        case "helicopter":
+            bundleImage("helicopter", width: 50, height: 50, flipHorizontal: false)
+                .offset(y: bobOffset)
+                .rotationEffect(.degrees(pitchAngle * 0.5))
+        case "rocket":
+            bundleImage("rocket", width: 44, height: 44, flipHorizontal: false)
+                .rotationEffect(.degrees(90)) // rockets point up; rotate to fly right
+                .offset(y: bobOffset)
+        case "dinosaur":
+            Text("🦕")
+                .font(.system(size: 32))
+                .offset(y: bobOffset)
+        default:
+            if animationThemeName.hasPrefix("emoji:") {
+                let emoji = String(animationThemeName.dropFirst(6))
+                Text(emoji.isEmpty ? "✈️" : emoji)
+                    .font(.system(size: 30))
+                    .offset(y: bobOffset)
+            } else {
+                // airplane (default)
+                bundleImage("airplane", width: 48, height: 48, flipHorizontal: false)
+                    .rotationEffect(.degrees(pitchAngle))
+                    .offset(y: pitchAngle > 0 ? 2 : -2)
+            }
+        }
+    }
+
+    private func startThemeAnimation() {
+        switch animationThemeName {
+        case "f1car", "motorbike", "locomotive", "dinosaur":
+            withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                bobOffset = 5.0
+            }
+        case "helicopter":
+            // gentle combined bob + slight pitch
             withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                bobOffset = 4.0
+                pitchAngle = 4.0
+            }
+        case "rocket":
+            withAnimation(Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 bobOffset = 6.0
-                pitchAngle = 5.0
+            }
+        default:
+            if animationThemeName.hasPrefix("emoji:") {
+                withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    bobOffset = 4.0
+                }
+            } else {
+                // airplane — pitch oscillation
+                withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    pitchAngle = 5.0
+                }
             }
         }
     }
@@ -125,6 +192,7 @@ struct BannerView: View {
     let cardBgName: String
     let fontColorName: String
     let width: CGFloat
+    let height: CGFloat
     let onClose: () -> Void
     
     private var timeRangeString: String {
@@ -145,6 +213,9 @@ struct BannerView: View {
     
     // Style Map: Background Color (Solid, no transparency for legibility)
     private var cardBgColor: Color {
+        if cardBgName.hasPrefix("#") {
+            return Color(hex: cardBgName)
+        }
         switch cardBgName.lowercased() {
         case "light": return Color(red: 248/255, green: 248/255, blue: 248/255)
         case "blue": return Color(red: 15/255, green: 30/255, blue: 75/255)
@@ -155,6 +226,9 @@ struct BannerView: View {
     
     // Style Map: Text Color
     private var textColor: Color {
+        if fontColorName.hasPrefix("#") {
+            return Color(hex: fontColorName)
+        }
         switch fontColorName.lowercased() {
         case "black": return Color.black
         case "yellow": return Color.yellow
@@ -164,10 +238,7 @@ struct BannerView: View {
     }
     
     private var headerColor: Color {
-        if cardBgName.lowercased() == "light" && fontColorName.lowercased() == "white" {
-            return Color(red: 180/255, green: 100/255, blue: 0/255) // Dark amber for white-light conflict
-        }
-        return fontColorName.lowercased() == "black" ? Color(red: 180/255, green: 100/255, blue: 0/255) : Color.amber
+        return textColor.opacity(0.7)
     }
     
     var body: some View {
@@ -201,7 +272,7 @@ struct BannerView: View {
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundColor(textColor)
                         .lineLimit(1)
-                        .frame(width: width, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
                     if startDate != nil {
                         Text(timeRangeString)
@@ -213,10 +284,12 @@ struct BannerView: View {
                 }
                 .padding(.leading, 16)
                 .padding(.trailing, 14)
-                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Platform Badge (Right side stub)
                 if let plat = platform {
+                    Spacer(minLength: 0)
+                    
                     TicketDivider()
                         .stroke(style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [3, 4]))
                         .foregroundColor(textColor.opacity(0.2))
@@ -237,12 +310,13 @@ struct BannerView: View {
                                     Text("Join")
                                         .font(.system(size: 10.5, weight: .black))
                                 }
-                                .foregroundColor(cardBgName.lowercased() == "light" ? .white : .black)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .foregroundColor(cardBgColor.isLight ? .white : .black)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(cardBgName.lowercased() == "light" ? Color.blue : Color.amber)
+                                .background(cardBgColor.isLight ? Color.blue : Color.amber)
                                 .cornerRadius(5)
-                                .shadow(color: (cardBgName.lowercased() == "light" ? Color.blue : Color.amber).opacity(0.3), radius: 3)
+                                .shadow(color: (cardBgColor.isLight ? Color.blue : Color.amber).opacity(0.3), radius: 3)
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -257,7 +331,7 @@ struct BannerView: View {
                                 .frame(maxWidth: 80)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .frame(width: 112)
                 }
             }
             
@@ -276,6 +350,7 @@ struct BannerView: View {
             .padding(.top, 6)
             .padding(.trailing, 6)
         }
+        .frame(width: width + (platform != nil ? 112 : 0), height: height)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(cardBgColor) // Solid background color
@@ -305,4 +380,11 @@ struct TicketDivider: Shape {
 
 extension Color {
     static let amber = Color(red: 255/255, green: 179/255, blue: 0/255)
+    
+    var isLight: Bool {
+        let nsColor = NSColor(self)
+        guard let rgbColor = nsColor.usingColorSpace(.deviceRGB) else { return false }
+        let luminance = 0.299 * rgbColor.redComponent + 0.587 * rgbColor.greenComponent + 0.114 * rgbColor.blueComponent
+        return luminance > 0.65
+    }
 }

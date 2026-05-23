@@ -1,4 +1,5 @@
 import Foundation
+import EventKit
 
 struct CalendarEvent: Codable {
     let title: String
@@ -10,6 +11,7 @@ struct CalendarEvent: Codable {
 }
 
 class CalendarManager {
+    let eventStore = EKEventStore()
     
     // Path to the python script inside the app bundle resources
     var scriptPath: String {
@@ -21,10 +23,35 @@ class CalendarManager {
     }
     
     func requestAccess(completion: @escaping (Bool) -> Void) {
-        // Run a test query to verify the bridge is active
-        fetchUpcomingEvents { events in
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if status == .authorized {
             completion(true)
+            return
         }
+        if #available(macOS 14.0, *), status.rawValue == 4 { // fullAccess
+            completion(true)
+            return
+        }
+        if status == .notDetermined {
+            if #available(macOS 14.0, *) {
+                eventStore.requestFullAccessToEvents { granted, error in
+                    completion(granted)
+                }
+            } else {
+                eventStore.requestAccess(to: .event) { granted, error in
+                    completion(granted)
+                }
+            }
+        } else {
+            completion(false)
+        }
+    }
+    
+    func isCalendarAuthorized() -> Bool {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if status == .authorized { return true }
+        if #available(macOS 14.0, *), status.rawValue == 4 { return true }
+        return false
     }
     
     private struct PythonEvent: Codable {

@@ -2,7 +2,7 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-APP_NAME="FlightNotifier"
+APP_NAME="Flyby"
 BUILD_DIR="build"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
@@ -37,6 +37,11 @@ chmod +x "${RESOURCES_DIR}/fetch_calendar.py"
 if [ -f AppIcon.icns ]; then
   cp AppIcon.icns "${RESOURCES_DIR}/"
 fi
+
+# Copy theme image assets
+for f in assets/*.png; do
+  [ -f "$f" ] && cp "$f" "${RESOURCES_DIR}/"
+done
 
 echo "🔏 Performing ad-hoc code signing..."
 codesign --force --deep --sign - "${APP_DIR}"

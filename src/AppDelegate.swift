@@ -17,14 +17,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         
         // Open setup window in foreground
-        let windowFrame = NSRect(x: 100, y: 100, width: 400, height: 480)
+        let windowFrame = NSRect(x: 100, y: 100, width: 400, height: 720)
         window = NSWindow(
             contentRect: windowFrame,
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Flight Notifier Setup"
+        window.title = "Flyby"
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SetupView(
             calendarManager: calendarManager,
@@ -66,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         
         // App header
-        let titleItem = NSMenuItem(title: "🛫 Flight Calendar Notifier", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "✨ Flyby", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
         
@@ -93,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(prefHeader)
         
         // Alert thresholds configuration (checkboxes)
-        let thresholds = [15, 10, 5, 2, 1]
+        let thresholds = [30, 15, 10, 5, 2, 1]
         for threshold in thresholds {
             let item = NSMenuItem(
                 title: "  \(threshold) minutes before",
@@ -150,9 +150,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func startTimer() {
-        print("⏱️ Starting background calendar polling timer (interval: 30s)")
+        print("⏱️ Starting background calendar polling timer (interval: 10s)")
         timer?.invalidate()
-        let t = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+        let t = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.checkCalendarForUpcomingMeetings()
         }
         RunLoop.current.add(t, forMode: .common)
@@ -187,7 +187,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             let now = Date()
             
-            print("🔍 Found \(events.count) upcoming events in the next 30 minutes:")
+            print("🔍 Found \(events.count) upcoming events in the next 45 minutes:")
             for event in events {
                 print("   - [\(event.title)] starting at \(event.startDate)")
             }
@@ -215,17 +215,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     let eventId = event.eventIdentifier
                     let startDate = event.startDate
                     
-                    let diffInMinutes = Int(round(startDate.timeIntervalSince(now) / 60.0))
-                    print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(startDate.timeIntervalSince(now))s)")
-                    
+                    let diffInSeconds = startDate.timeIntervalSince(now)
+                    let diffInMinutes = Int(round(diffInSeconds / 60.0))
+                    print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(Int(diffInSeconds))s)")
+
                     for threshold in enabledThresholds {
-                        if diffInMinutes == threshold {
+                        // Fire if within 45 seconds of the threshold — robust against poll timing gaps
+                        let thresholdSeconds = Double(threshold) * 60.0
+                        let withinWindow = diffInSeconds > 0 && abs(diffInSeconds - thresholdSeconds) <= 45
+                        if withinWindow {
                             var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
                             if !triggeredSet.contains(threshold) {
-                                print("🔔 Triggering \(threshold)-minute flight notification for [\(event.title)]!")
+                                print("🔔 Triggering \(threshold)-minute notification for [\(event.title)]!")
                                 triggeredSet.insert(threshold)
                                 self.triggeredEvents[eventId] = triggeredSet
-                                
                                 self.showFlightAnimation(
                                     meetingTitle: event.title,
                                     minutesRemaining: threshold,
@@ -234,8 +237,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                     platform: event.platform,
                                     meetingUrl: event.url
                                 )
-                            } else {
-                                print("     (Already triggered \(threshold)-minute notification for [\(event.title)])")
                             }
                         }
                     }
@@ -256,21 +257,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let screenFrame = screen.frame
         print("   * Target Screen Frame: \(screenFrame), Mouse Location: \(mouseLocation)")
-        let windowHeight: CGFloat = 150.0
-        
-        // Calculate the exact width required for the window based on settings and platform
-        let bannerSize = settingsManager.bannerSize()
-        var cardWidth: CGFloat = 230
-        if bannerSize == "small" { cardWidth = 160 }
-        else if bannerSize == "large" { cardWidth = 300 }
+        let cardWidth = CGFloat(settingsManager.bannerWidth())
+        let cardHeight = CGFloat(settingsManager.bannerHeight())
         
         let hasPlatform = (platform != nil)
         let platformStubWidth: CGFloat = hasPlatform ? 112 : 0
         let paddingAndPlaneWidth: CGFloat = 145 // plane, spacing, details padding, divider, offsets, safety buffer
         let windowWidth = cardWidth + platformStubWidth + paddingAndPlaneWidth
+        let windowHeight = cardHeight + 50.0 // safety buffer for vertical bobbing and shadow
         
-        // Position it nicely in the top quadrant of the screen
-        let windowY = screenFrame.minY + screenFrame.height - windowHeight - 70
+        // Position based on user preference
+        let position = settingsManager.bannerPosition()
+        let windowY: CGFloat
+        switch position {
+        case "middle":
+            windowY = screenFrame.minY + (screenFrame.height - windowHeight) / 2
+        case "bottom":
+            windowY = screenFrame.minY + 30
+        default: // top
+            windowY = screenFrame.minY + screenFrame.height - windowHeight - 70
+        }
         
         // Start position: off-screen left
         let startX = screenFrame.minX - windowWidth
@@ -303,8 +309,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             eventTitle: meetingTitle,
             minutesRemaining: minutesRemaining,
             screenWidth: windowWidth,
-            airplaneColorName: settingsManager.airplaneColor(),
-            bannerSizeName: settingsManager.bannerSize(),
+            bannerWidth: cardWidth,
+            bannerHeight: cardHeight,
             flightSpeedName: settingsManager.flightSpeed(),
             cardBgName: settingsManager.cardBackground(),
             fontColorName: settingsManager.textColor(),
@@ -312,6 +318,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             endDate: endDate,
             platform: platform,
             meetingUrl: meetingUrl,
+            animationThemeName: settingsManager.animationTheme(),
             onClose: { [weak self, weak overlayPanel] in
                 DispatchQueue.main.async {
                     timerReference?.invalidate()

@@ -53,7 +53,7 @@ def main():
     now = NSDate.date()
     
     if args.action == 'upcoming':
-        future = NSDate.dateWithTimeIntervalSinceNow_(30 * 60)
+        future = NSDate.dateWithTimeIntervalSinceNow_(45 * 60)
         predicate = store.predicateForEventsWithStartDate_endDate_calendars_(now, future, None)
         events = store.eventsMatchingPredicate_(predicate)
         
