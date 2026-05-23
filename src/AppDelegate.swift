@@ -1,0 +1,367 @@
+import AppKit
+import SwiftUI
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusBarItem: NSStatusItem!
+    let calendarManager = CalendarManager()
+    let settingsManager = SettingsManager()
+    var timer: Timer?
+    var activeWindows: [NSWindow] = []
+    var window: NSWindow!
+    
+    // Store triggered thresholds: eventIdentifier -> Set of intervals (e.g. [10, 5])
+    var triggeredEvents: [String: Set<Int>] = [:]
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Initialize the menu bar UI
+        setupMenuBar()
+        
+        // Open setup window in foreground
+        let windowFrame = NSRect(x: 100, y: 100, width: 400, height: 480)
+        window = NSWindow(
+            contentRect: windowFrame,
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Flight Notifier Setup"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: SetupView(
+            calendarManager: calendarManager,
+            settingsManager: settingsManager,
+            onTestFlight: { [weak self] in
+                self?.testAnimation()
+            }
+        ))
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        
+        print("🚀 Flight Notifier started!")
+        
+        // Force the app to activate (foreground focus)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Start background polling immediately (Python bridge handles authentication)
+        calendarManager.requestAccess { [weak self] granted in
+            print("🔑 Calendar access request completed. Granted: \(granted)")
+            DispatchQueue.main.async {
+                self?.updateMenu()
+                if granted {
+                    self?.startTimer()
+                }
+            }
+        }
+    }
+    
+    func setupMenuBar() {
+        statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusBarItem.button {
+            button.image = NSImage(systemSymbolName: "airplane.circle", accessibilityDescription: "Flight Notifier")
+        }
+        updateMenu()
+    }
+    
+    func updateMenu() {
+        let menu = NSMenu()
+        
+        // App header
+        let titleItem = NSMenuItem(title: "🛫 Flight Calendar Notifier", action: nil, keyEquivalent: "")
+        titleItem.isEnabled = false
+        menu.addItem(titleItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Display Next Meeting Label (Python Bridge manages access)
+        let statusItem = NSMenuItem(title: "📅 Next meeting: Checking...", action: nil, keyEquivalent: "")
+        statusItem.isEnabled = false
+        menu.addItem(statusItem)
+        updateNextMeetingLabel(statusItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Test button
+        let testItem = NSMenuItem(title: "Test Flight Animation", action: #selector(testAnimation), keyEquivalent: "t")
+        testItem.target = self
+        menu.addItem(testItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Preferences header
+        let prefHeader = NSMenuItem(title: "Alert Intervals:", action: nil, keyEquivalent: "")
+        prefHeader.isEnabled = false
+        menu.addItem(prefHeader)
+        
+        // Alert thresholds configuration (checkboxes)
+        let thresholds = [15, 10, 5, 2, 1]
+        for threshold in thresholds {
+            let item = NSMenuItem(
+                title: "  \(threshold) minutes before",
+                action: #selector(toggleThreshold(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.tag = threshold
+            item.state = settingsManager.isThresholdEnabled(threshold) ? .on : .off
+            menu.addItem(item)
+        }
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Quit
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        statusBarItem.menu = menu
+    }
+    
+    @objc func requestAccessAgain() {
+        calendarManager.requestAccess { [weak self] granted in
+            DispatchQueue.main.async {
+                self?.updateMenu()
+                if granted {
+                    self?.startTimer()
+                }
+            }
+        }
+    }
+    
+    @objc func toggleThreshold(_ sender: NSMenuItem) {
+        let threshold = sender.tag
+        let isEnabled = settingsManager.isThresholdEnabled(threshold)
+        settingsManager.setThreshold(threshold, enabled: !isEnabled)
+        updateMenu()
+    }
+    
+    @objc func testAnimation() {
+        showFlightAnimation(
+            meetingTitle: "Project Review Meeting",
+            minutesRemaining: 10,
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(30 * 60),
+            platform: "Google Meet",
+            meetingUrl: "https://meet.google.com/abc-defg-hij"
+        )
+    }
+    
+    @objc func quitApp() {
+        NSApplication.shared.terminate(nil)
+    }
+    
+    func startTimer() {
+        print("⏱️ Starting background calendar polling timer (interval: 30s)")
+        timer?.invalidate()
+        let t = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.checkCalendarForUpcomingMeetings()
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
+        checkCalendarForUpcomingMeetings()
+    }
+    
+    func updateNextMeetingLabel(_ menuItem: NSMenuItem) {
+        calendarManager.fetchNextUpcomingEvent { event in
+            DispatchQueue.main.async {
+                if let event = event {
+                    let title = event.title
+                    let startDate = event.startDate
+                    let diff = Int(round(startDate.timeIntervalSinceNow / 60.0))
+                    if diff > 0 {
+                        menuItem.title = "📅 Next: \(title) (in \(diff)m)"
+                    } else if diff == 0 {
+                        menuItem.title = "📅 Next: \(title) (starting now)"
+                    } else {
+                        menuItem.title = "📅 Next: \(title) (started \(abs(diff))m ago)"
+                    }
+                } else {
+                    menuItem.title = "📅 No more meetings scheduled today"
+                }
+            }
+        }
+    }
+    
+    func checkCalendarForUpcomingMeetings() {
+        print("📅 Polling calendar for upcoming meetings...")
+        calendarManager.fetchUpcomingEvents { [weak self] events in
+            guard let self = self else { return }
+            let now = Date()
+            
+            print("🔍 Found \(events.count) upcoming events in the next 30 minutes:")
+            for event in events {
+                print("   - [\(event.title)] starting at \(event.startDate)")
+            }
+            
+            DispatchQueue.main.async {
+                if let menu = self.statusBarItem.menu, menu.items.count > 2 {
+                    let nextMeetingItem = menu.items[2]
+                    self.updateNextMeetingLabel(nextMeetingItem)
+                }
+            }
+            
+            let activeEventIds = Set(events.compactMap { $0.eventIdentifier })
+            
+            DispatchQueue.main.async {
+                for eventId in self.triggeredEvents.keys {
+                    if !activeEventIds.contains(eventId) {
+                        print("🧹 Clearing triggered memory for old event ID: \(eventId)")
+                        self.triggeredEvents.removeValue(forKey: eventId)
+                    }
+                }
+                
+                let enabledThresholds = self.settingsManager.enabledThresholds()
+                
+                for event in events {
+                    let eventId = event.eventIdentifier
+                    let startDate = event.startDate
+                    
+                    let diffInMinutes = Int(round(startDate.timeIntervalSince(now) / 60.0))
+                    print("     * Event [\(event.title)] starting in \(diffInMinutes)m (exact diff: \(startDate.timeIntervalSince(now))s)")
+                    
+                    for threshold in enabledThresholds {
+                        if diffInMinutes == threshold {
+                            var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
+                            if !triggeredSet.contains(threshold) {
+                                print("🔔 Triggering \(threshold)-minute flight notification for [\(event.title)]!")
+                                triggeredSet.insert(threshold)
+                                self.triggeredEvents[eventId] = triggeredSet
+                                
+                                self.showFlightAnimation(
+                                    meetingTitle: event.title,
+                                    minutesRemaining: threshold,
+                                    startDate: event.startDate,
+                                    endDate: event.endDate,
+                                    platform: event.platform,
+                                    meetingUrl: event.url
+                                )
+                            } else {
+                                print("     (Already triggered \(threshold)-minute notification for [\(event.title)])")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func showFlightAnimation(meetingTitle: String, minutesRemaining: Int, startDate: Date?, endDate: Date?, platform: String?, meetingUrl: String?) {
+        print("🎬 showFlightAnimation triggered! Title: '\(meetingTitle)', minutesRemaining: \(minutesRemaining)")
+        // Detect active screen (screen containing the mouse cursor)
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        
+        guard let screen = targetScreen else { return }
+        
+        let screenFrame = screen.frame
+        print("   * Target Screen Frame: \(screenFrame), Mouse Location: \(mouseLocation)")
+        let windowHeight: CGFloat = 150.0
+        
+        // Calculate the exact width required for the window based on settings and platform
+        let bannerSize = settingsManager.bannerSize()
+        var cardWidth: CGFloat = 230
+        if bannerSize == "small" { cardWidth = 160 }
+        else if bannerSize == "large" { cardWidth = 300 }
+        
+        let hasPlatform = (platform != nil)
+        let platformStubWidth: CGFloat = hasPlatform ? 112 : 0
+        let paddingAndPlaneWidth: CGFloat = 145 // plane, spacing, details padding, divider, offsets, safety buffer
+        let windowWidth = cardWidth + platformStubWidth + paddingAndPlaneWidth
+        
+        // Position it nicely in the top quadrant of the screen
+        let windowY = screenFrame.minY + screenFrame.height - windowHeight - 70
+        
+        // Start position: off-screen left
+        let startX = screenFrame.minX - windowWidth
+        let endX = screenFrame.minX + screenFrame.width
+        
+        let rect = NSRect(
+            x: startX,
+            y: windowY,
+            width: windowWidth,
+            height: windowHeight
+        )
+        
+        let overlayPanel = FlightOverlayPanel(contentRect: rect, screen: screen)
+        overlayPanel.ignoresMouseEvents = false // Let clicks pass inside the window!
+        
+        // Setup flight speed duration
+        let speed = settingsManager.flightSpeed()
+        var duration: Double = 8.0
+        if speed == "slow" { duration = 12.0 }
+        else if speed == "fast" { duration = 5.0 }
+        
+        let fps: Double = 60.0
+        let totalSteps = Int(duration * fps)
+        var currentStep = 0
+        
+        var isPaused = false
+        var timerReference: Timer? = nil
+        
+        let animView = FlightAnimationView(
+            eventTitle: meetingTitle,
+            minutesRemaining: minutesRemaining,
+            screenWidth: windowWidth,
+            airplaneColorName: settingsManager.airplaneColor(),
+            bannerSizeName: settingsManager.bannerSize(),
+            flightSpeedName: settingsManager.flightSpeed(),
+            cardBgName: settingsManager.cardBackground(),
+            fontColorName: settingsManager.textColor(),
+            startDate: startDate,
+            endDate: endDate,
+            platform: platform,
+            meetingUrl: meetingUrl,
+            onClose: { [weak self, weak overlayPanel] in
+                DispatchQueue.main.async {
+                    timerReference?.invalidate()
+                    if let panel = overlayPanel {
+                        panel.close()
+                        self?.activeWindows.removeAll { $0 === panel }
+                    }
+                }
+            },
+            onHoverEnter: {
+                isPaused = true
+                print("⏸️ Mouse hover entered: Pausing flight animation")
+            },
+            onHoverExit: {
+                isPaused = false
+                print("▶️ Mouse hover exited: Resuming flight animation")
+            }
+        )
+        
+        let hostingView = NSHostingView(rootView: animView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.masksToBounds = false
+        overlayPanel.contentView = hostingView
+        
+        activeWindows.append(overlayPanel)
+        overlayPanel.orderFrontRegardless()
+        
+        // Animate the window X coordinate horizontally
+        let animTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / fps, repeats: true) { animTimer in
+            if isPaused { return }
+            currentStep += 1
+            let progress = CGFloat(currentStep) / CGFloat(totalSteps)
+            
+            if currentStep % 60 == 0 || currentStep == 1 {
+                print("   [Animation Progress] Step \(currentStep)/\(totalSteps) (\(Int(progress * 100))%), current x: \(startX + progress * (endX - startX))")
+            }
+            
+            if progress >= 1.0 {
+                print("🏁 Animation finished! Closing panel.")
+                animTimer.invalidate()
+                DispatchQueue.main.async {
+                    overlayPanel.close()
+                    self.activeWindows.removeAll { $0 === overlayPanel }
+                }
+            } else {
+                let x = startX + progress * (endX - startX)
+                overlayPanel.setFrameOrigin(NSPoint(x: x, y: windowY))
+            }
+        }
+        RunLoop.current.add(animTimer, forMode: .common)
+        timerReference = animTimer
+    }
+}

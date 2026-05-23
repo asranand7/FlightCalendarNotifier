@@ -1,0 +1,15 @@
+# Logs
+*.log
+debug.log
+app_output.log
+
+# Build artifacts
+build/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
