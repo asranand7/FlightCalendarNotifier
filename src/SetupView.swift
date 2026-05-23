@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
@@ -24,6 +25,7 @@ struct SetupView: View {
 
     @State private var selection: SettingsSection? = .reminders
 
+    @State private var launchAtLogin: Bool = false
     @State private var calendarStatus: String = "Checking..."
     @State private var isAuthorized: Bool = false
     @State private var bannerWidth: Double = 230.0
@@ -102,6 +104,11 @@ struct SetupView: View {
 
     private var generalPane: some View {
         paneScroll {
+            glassCard(title: "Startup", footer: "Keep Flyby running in the background and start it automatically when you log in.") {
+                Toggle("Launch at Login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { setLaunchAtLogin(launchAtLogin) }
+            }
+
             glassCard(title: "Calendar Access", footer: "Flyby reads upcoming events to fly a reminder across your screen before each meeting.") {
                 HStack {
                     Text("Status")
@@ -575,7 +582,25 @@ struct SetupView: View {
         todoistStatus = hasToken ? "Connected" : "Token Required"
         isEditingToken = !hasToken
 
+        launchAtLogin = (SMAppService.mainApp.status == .enabled)
         checkPermission()
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                if SMAppService.mainApp.status != .enabled {
+                    try SMAppService.mainApp.register()
+                }
+            } else {
+                if SMAppService.mainApp.status == .enabled {
+                    try SMAppService.mainApp.unregister()
+                }
+            }
+        } catch {
+            print("⚠️ Launch at Login toggle failed: \(error.localizedDescription)")
+            launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        }
     }
 
     private func checkPermission() {

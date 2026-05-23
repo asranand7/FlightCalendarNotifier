@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBarItem: NSStatusItem!
@@ -18,6 +19,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var cachedTodoistTasks: [TodoistTask] = []
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Always keep Flyby registered to launch at login
+        enableLaunchAtLogin()
+
         // Initialize the menu bar UI
         setupMenuBar()
         
@@ -170,6 +174,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    func enableLaunchAtLogin() {
+        guard SMAppService.mainApp.status != .enabled else { return }
+        do {
+            try SMAppService.mainApp.register()
+            print("✅ Registered Flyby to launch at login")
+        } catch {
+            print("⚠️ Could not register login item: \(error.localizedDescription)")
+        }
     }
     
     func startTimer() {

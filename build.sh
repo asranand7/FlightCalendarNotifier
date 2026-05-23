@@ -48,5 +48,18 @@ echo "🔏 Performing ad-hoc code signing..."
 codesign --force --deep --sign - "${APP_DIR}"
 
 echo "✅ Success! Built ${APP_DIR} successfully."
-echo "You can launch the app by double-clicking it in Finder or running:"
-echo "open ${APP_DIR}"
+
+# Optional install step: ./build.sh install  → copies the app into /Applications
+if [ "$1" == "install" ]; then
+  echo "📦 Installing to /Applications/${APP_NAME}.app ..."
+  # Quit any running instance so the bundle can be replaced cleanly
+  pkill -x "${APP_NAME}" 2>/dev/null || true
+  rm -rf "/Applications/${APP_NAME}.app"
+  cp -R "$APP_DIR" "/Applications/"
+  echo "✅ Installed. Launching..."
+  open "/Applications/${APP_NAME}.app"
+else
+  echo "You can launch the app by double-clicking it in Finder or running:"
+  echo "open ${APP_DIR}"
+  echo "Or install it permanently with: ./build.sh install"
+fi
