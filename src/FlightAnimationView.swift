@@ -22,7 +22,7 @@ struct FlightAnimationView: View {
     let onHoverEnter: () -> Void
     let onHoverExit: () -> Void
     
-    @State private var pitchAngle: Double = -5.0
+    @State private var pitchAngle: Double = -4.0
     @State private var bobOffset: CGFloat = -4.0
     @State private var spinAngle: Double = 0.0
     @State private var scaleVal: CGFloat = 0.9
@@ -81,7 +81,7 @@ struct FlightAnimationView: View {
                 // Animated subject (theme-driven)
                 themeSubject()
             }
-            .rotationEffect(.degrees(-1.5))
+            .rotationEffect(.degrees(-4.0))
             .offset(x: 10)
             .onHover { hovering in
                 if hovering {
@@ -209,9 +209,9 @@ struct FlightAnimationView: View {
                     bobOffset = 4.0
                 }
             } else {
-                // airplane — pitch oscillation
+                // airplane — always nose-up, oscillates between -4° and -12°
                 withAnimation(Animation.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                    pitchAngle = 8.0
+                    pitchAngle = -12.0
                 }
             }
         }
