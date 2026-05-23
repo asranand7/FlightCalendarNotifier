@@ -109,6 +109,10 @@ struct SetupView: View {
                                                    object: nil, queue: .main) { _ in
                 lastAutoSync = settingsManager.lastTodoistSync()
             }
+            NotificationCenter.default.addObserver(forName: Notification.Name("CalendarAccessChanged"),
+                                                   object: nil, queue: .main) { _ in
+                checkPermission()
+            }
         }
     }
 

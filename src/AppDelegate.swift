@@ -61,12 +61,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Register for settings/token changes
         NotificationCenter.default.addObserver(self, selector: #selector(handleSettingsChanged), name: Notification.Name("TodoistTokenChanged"), object: nil)
         
+        // Register for system wake to restart timers that stall during sleep
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleSystemWake), name: NSWorkspace.didWakeNotification, object: nil)
+        
         // Start timers conditionally based on settings
         if settingsManager.isCalendarEnabled() {
             calendarManager.requestAccess { [weak self] granted in
                 print("🔑 Calendar access request completed. Granted: \(granted)")
                 DispatchQueue.main.async {
                     self?.updateMenu()
+                    NotificationCenter.default.post(name: Notification.Name("CalendarAccessChanged"), object: nil)
                     if granted {
                         self?.startTimer()
                     } else if self?.settingsManager.isTodoistEnabled() == true {
@@ -347,6 +351,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             }
+        }
+    }
+
+    @objc func handleSystemWake() {
+        print("☀️ System woke from sleep")
+        
+        // Restart the calendar polling timer (it stalls during sleep)
+        if settingsManager.isCalendarEnabled() || settingsManager.isTodoistEnabled() {
+            if timer != nil {
+                print("   ↻ Restarting calendar polling timer")
+                startTimer()
+            }
+        }
+        
+        // Check if Todoist sync is overdue and re-sync immediately
+        if settingsManager.isTodoistEnabled() {
+            let interval = TimeInterval(settingsManager.todoistSyncInterval())
+            let lastSync = settingsManager.lastTodoistSync()
+            let elapsed = lastSync.map { Date().timeIntervalSince($0) } ?? .infinity
+            
+            if elapsed >= interval {
+                print("   ↻ Todoist sync overdue (last sync \(Int(elapsed))s ago, interval \(Int(interval))s). Syncing now...")
+                fetchTodoistTasks()
+            } else {
+                print("   ✓ Todoist sync still within interval (last sync \(Int(elapsed))s ago)")
+            }
+            
+            // Always restart the Todoist timer so it counts from now, not from pre-sleep
+            print("   ↻ Restarting Todoist sync timer")
+            startTodoistTimer()
         }
     }
 
