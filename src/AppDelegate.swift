@@ -69,13 +69,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.updateMenu()
                     if granted {
                         self?.startTimer()
+                    } else if self?.settingsManager.isTodoistEnabled() == true {
+                        // Calendar access denied but Todoist is on — still need the polling loop
+                        self?.startTimer()
                     }
                 }
             }
+        } else if settingsManager.isTodoistEnabled() {
+            // Calendar disabled but Todoist is on — start polling loop for Todoist
+            startTimer()
+            updateMenu()
         } else {
             updateMenu()
         }
-        
+
         if settingsManager.isTodoistEnabled() {
             startTodoistTimer()
         }
@@ -319,7 +326,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 for threshold in todoistThresholds {
                     let thresholdSeconds = Double(threshold) * 60.0
-                    let withinWindow = diffInSeconds <= thresholdSeconds && diffInSeconds > (thresholdSeconds - 15.0)
+                    let withinWindow = diffInSeconds > 0 && abs(diffInSeconds - thresholdSeconds) <= 45
                     
                     if withinWindow {
                         var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
@@ -348,43 +355,53 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             self.updateMenu()
             
-            if self.settingsManager.isCalendarEnabled() {
+            let calendarOn = self.settingsManager.isCalendarEnabled()
+            let todoistOn  = self.settingsManager.isTodoistEnabled()
+
+            if calendarOn {
                 if self.timer == nil {
                     self.calendarManager.requestAccess { granted in
-                        if granted {
-                            DispatchQueue.main.async {
-                                self.startTimer()
-                            }
+                        DispatchQueue.main.async {
+                            if granted || todoistOn { self.startTimer() }
                         }
                     }
                 }
             } else {
-                self.timer?.invalidate()
-                self.timer = nil
+                // Clear calendar-triggered events
                 let keysToRemove = self.triggeredEvents.keys.filter { !$0.hasPrefix("todoist_") }
-                for key in keysToRemove {
-                    self.triggeredEvents.removeValue(forKey: key)
+                for key in keysToRemove { self.triggeredEvents.removeValue(forKey: key) }
+
+                if !todoistOn {
+                    // Nothing needs the polling loop anymore
+                    self.timer?.invalidate()
+                    self.timer = nil
+                } else if self.timer == nil {
+                    // Calendar off but Todoist still on — keep/start polling
+                    self.startTimer()
                 }
             }
-            
-            if self.settingsManager.isTodoistEnabled() {
+
+            if todoistOn {
                 self.startTodoistTimer()
+                if self.timer == nil { self.startTimer() }
             } else {
                 self.todoistTimer?.invalidate()
                 self.todoistTimer = nil
                 self.cachedTodoistTasks.removeAll()
                 let keysToRemove = self.triggeredEvents.keys.filter { $0.hasPrefix("todoist_") }
-                for key in keysToRemove {
-                    self.triggeredEvents.removeValue(forKey: key)
+                for key in keysToRemove { self.triggeredEvents.removeValue(forKey: key) }
+                if !calendarOn {
+                    self.timer?.invalidate()
+                    self.timer = nil
                 }
             }
         }
     }
     
     func startTodoistTimer() {
-        print("⏱️ Starting Todoist caching timer (interval: 10m)")
+        print("⏱️ Starting Todoist caching timer (interval: 5m)")
         todoistTimer?.invalidate()
-        let t = Timer.scheduledTimer(withTimeInterval: 600.0, repeats: true) { [weak self] _ in
+        let t = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
             self?.fetchTodoistTasks()
         }
         RunLoop.current.add(t, forMode: .common)
