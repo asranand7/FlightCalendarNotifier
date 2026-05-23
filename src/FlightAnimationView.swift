@@ -175,6 +175,24 @@ struct FlightAnimationView: View {
         case "rickshaw":
             bundleImage("rickshaw", width: 68, height: 68, flipHorizontal: false)
                 .offset(y: bobOffset)
+        case "modiji":
+            bundleImage("modiji", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "nirmala":
+            bundleImage("nirmala", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "rahul":
+            bundleImage("rahul", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "trump":
+            bundleImage("trump", width: 56, height: 56, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "wonderwoman":
+            bundleImage("wonderwoman", width: 60, height: 60, flipHorizontal: false)
+                .offset(y: bobOffset)
+        case "thor":
+            bundleImage("thor", width: 68, height: 68, flipHorizontal: false)
+                .offset(y: bobOffset)
         case "dinosaur":
             Text("🦕")
                 .font(.system(size: 32))
@@ -225,7 +243,8 @@ struct FlightAnimationView: View {
     private func startThemeAnimation() {
         switch animationThemeName {
         case "f1car", "motorbike", "locomotive", "dinosaur",
-             "snoopy", "bluecat", "goldendog", "elephant", "penguin", "unicorn", "cartman", "rickshaw":
+             "snoopy", "bluecat", "goldendog", "elephant", "penguin", "unicorn", "cartman", "rickshaw",
+             "modiji", "nirmala", "rahul", "trump", "wonderwoman", "thor":
             withAnimation(Animation.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 bobOffset = 5.0
             }

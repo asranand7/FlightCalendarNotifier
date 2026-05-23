@@ -444,6 +444,12 @@ struct SetupView: View {
                     themeButton(key: "webslinger", label: "Spidey") { themePreviewImage("webslinger", fallback: "🕷️") }
                     themeButton(key: "cartman", label: "Cart") { themePreviewImage("cartman", fallback: "🛒") }
                     themeButton(key: "rickshaw", label: "Rickshaw") { themePreviewImage("rickshaw", fallback: "🛺") }
+                    themeButton(key: "modiji", label: "Modi") { themePreviewImage("modiji", fallback: "🇮🇳") }
+                    themeButton(key: "nirmala", label: "Nirmala") { themePreviewImage("nirmala", fallback: "🏛️") }
+                    themeButton(key: "rahul", label: "Rahul") { themePreviewImage("rahul", fallback: "✋") }
+                    themeButton(key: "trump", label: "Trump") { themePreviewImage("trump", fallback: "🇺🇸") }
+                    themeButton(key: "wonderwoman", label: "WonderW") { themePreviewImage("wonderwoman", fallback: "🦸‍♀️") }
+                    themeButton(key: "thor", label: "Thor") { themePreviewImage("thor", fallback: "⚡") }
                     themeButton(key: "dinosaur", label: "Dino") { Text("🦕").font(.system(size: 28)) }
                     themeButton(key: "emoji:\(customEmoji)", label: "Emoji") { Text("✏️").font(.system(size: 24)) }
                     customImageTile()
