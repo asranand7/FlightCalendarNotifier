@@ -7,6 +7,7 @@ before calendar meetings and timed Todoist tasks, so you never miss the start.
 - **Todoist reminders** — fetches timed tasks via the Todoist API.
 - **Per-source alert intervals** — choose independently when to be reminded (1, 2, 5, 10, 15, 30 min before) for Calendar and Todoist.
 - **Customizable banner** — theme (plane, F1 car, rocket, custom image, or 18+ high-quality character themes like Snoopy, Superhero, Modiji, Trump, Thor, Wonder Woman), size, speed, position, colors.
+- **Ignore Keywords** — filter out calendar events with specific words in their titles (e.g. "Focus", "OOO", "Lunch") using a modern tokenized tag/chip input.
 - **Notification History** — view a rolling list of the last 50 triggered notifications with source icons, timestamps, and quick cleanup.
 - **Secure Credentials** — sensitive API keys are stored safely inside the native macOS Keychain.
 - **Launch at Login** — keep it running quietly in the background.
@@ -89,7 +90,7 @@ All settings live in the app window (open it from the menu-bar ✈️ icon → o
 | Pane | What you can change |
 |------|---------------------|
 | **General** | Launch at Login, Calendar permission status, version info |
-| **Reminders** | Enable Calendar / Todoist, per-source alert intervals, Todoist token verification & sync controls |
+| **Reminders** | Enable Calendar / Todoist, per-source alert intervals, Todoist token verification, calendar keyword exclusion filters |
 | **Appearance** | Animation theme (18+ presets + custom images), banner width/height, flight speed, position, card/text colors |
 | **History** | View and clear the last 50 triggered notifications |
 
