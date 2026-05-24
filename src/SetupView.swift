@@ -46,7 +46,8 @@ struct SetupView: View {
     @State private var customTextColor: Color = Color(hex: "#FFFFFF")
 
     @State private var isCalendarEnabled: Bool = false
-    @State private var ignoredKeywords: String = ""
+    @State private var tags: [String] = []
+    @State private var newKeywordInput: String = ""
     @State private var isTodoistEnabled: Bool = false
     @State private var calendarThresholds: Set<Int> = []
     @State private var todoistThresholds: Set<Int> = []
@@ -279,18 +280,74 @@ struct SetupView: View {
                         }
                     }
                     Divider().opacity(0.4)
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Ignore Keywords")
-                            Spacer()
-                            TextField("e.g. Focus, OOO, Lunch", text: $ignoredKeywords)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 200)
-                                .onChange(of: ignoredKeywords) {
-                                    settingsManager.setIgnoredKeywords(ignoredKeywords)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Ignore Keywords")
+                            .font(.system(size: 13, weight: .medium))
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            if !tags.isEmpty {
+                                FlowLayout(spacing: 6) {
+                                    ForEach(tags, id: \.self) { tag in
+                                        HStack(spacing: 4) {
+                                            Text(tag)
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(.primary)
+                                            Button(action: {
+                                                removeTag(tag)
+                                            }) {
+                                                Image(systemName: "xmark")
+                                                    .font(.system(size: 8, weight: .bold))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Remove \(tag)")
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.primary.opacity(0.06))
+                                        .cornerRadius(6)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        )
+                                    }
                                 }
+                            }
+                            
+                            HStack {
+                                TextField("Type keyword (e.g. Focus) and press Enter or comma...", text: $newKeywordInput)
+                                    .textFieldStyle(.plain)
+                                    .onSubmit {
+                                        addKeywordFromInput()
+                                    }
+                                    .onChange(of: newKeywordInput) {
+                                        if newKeywordInput.hasSuffix(",") {
+                                            addKeywordFromInput()
+                                        }
+                                    }
+                                
+                                if !newKeywordInput.isEmpty {
+                                    Button("Add") {
+                                        addKeywordFromInput()
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.system(size: 11, weight: .medium))
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.15))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                            )
                         }
-                        Text("Comma-separated list of keywords to ignore. Events containing these in the title will not trigger banners.")
+                        .padding(8)
+                        .background(Color.primary.opacity(0.02))
+                        .cornerRadius(8)
+                        
+                        Text("Events containing any of these keywords in their title will not trigger alerts.")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                     }
@@ -956,7 +1013,11 @@ struct SetupView: View {
         lastAutoSync = settingsManager.lastTodoistSync()
         todoistSyncInterval = settingsManager.todoistSyncInterval()
         isCalendarEnabled = settingsManager.isCalendarEnabled()
-        ignoredKeywords = settingsManager.ignoredKeywords()
+        let keywordsStr = settingsManager.ignoredKeywords()
+        tags = keywordsStr
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         isTodoistEnabled = settingsManager.isTodoistEnabled()
         calendarThresholds = Set(settingsManager.calendarThresholds())
         todoistThresholds = Set(settingsManager.todoistThresholds())
@@ -1049,6 +1110,31 @@ struct SetupView: View {
                 }
             }
         }
+    }
+
+    private func addKeywordFromInput() {
+        var clean = newKeywordInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasSuffix(",") {
+            clean.removeLast()
+            clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let lowerClean = clean.lowercased()
+        if !clean.isEmpty && !tags.contains(where: { $0.lowercased() == lowerClean }) {
+            tags.append(clean)
+            saveTags()
+        }
+        newKeywordInput = ""
+    }
+    
+    private func removeTag(_ tag: String) {
+        tags.removeAll { $0 == tag }
+        saveTags()
+    }
+    
+    private func saveTags() {
+        let joined = tags.joined(separator: ", ")
+        settingsManager.setIgnoredKeywords(joined)
+        NotificationCenter.default.post(name: Notification.Name("TodoistTokenChanged"), object: nil)
     }
 }
 
@@ -1144,5 +1230,51 @@ class PasteSecureTextField: NSSecureTextField {
             }
         }
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+// MARK: - Flow Layout for Tags
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 0
+        var height: CGFloat = 0
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var maxRowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > width && currentX > 0 {
+                currentX = 0
+                currentY += maxRowHeight + spacing
+                maxRowHeight = 0
+            }
+            currentX += size.width + spacing
+            maxRowHeight = max(maxRowHeight, size.height)
+        }
+        height = currentY + maxRowHeight
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let width = bounds.width
+        var currentX: CGFloat = bounds.minX
+        var currentY: CGFloat = bounds.minY
+        var maxRowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.minX + width && currentX > bounds.minX {
+                currentX = bounds.minX
+                currentY += maxRowHeight + spacing
+                maxRowHeight = 0
+            }
+            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: ProposedViewSize(size))
+            currentX += size.width + spacing
+            maxRowHeight = max(maxRowHeight, size.height)
+        }
     }
 }
