@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import Security
 
 class SettingsManager {
     private let defaults = UserDefaults.standard
@@ -89,9 +90,6 @@ class SettingsManager {
         }
         if defaults.object(forKey: isTodoistEnabledKey) == nil {
             defaults.set(false, forKey: isTodoistEnabledKey)
-        }
-        if defaults.object(forKey: todoistTokenKey) == nil {
-            defaults.set("", forKey: todoistTokenKey)
         }
         if defaults.object(forKey: soundEnabledKey) == nil {
             defaults.set(true, forKey: soundEnabledKey)
@@ -219,11 +217,30 @@ class SettingsManager {
     }
     
     func todoistToken() -> String {
-        return defaults.string(forKey: todoistTokenKey) ?? ""
+        // 1. Try to read from Keychain
+        if let token = KeychainHelper.get() {
+            return token
+        }
+        
+        // 2. Check if we have a legacy token in UserDefaults to migrate
+        if let legacyToken = defaults.string(forKey: todoistTokenKey), !legacyToken.isEmpty {
+            let success = KeychainHelper.set(legacyToken)
+            if success {
+                defaults.removeObject(forKey: todoistTokenKey)
+            }
+            return legacyToken
+        }
+        
+        return ""
     }
     
     func setTodoistToken(_ token: String) {
-        defaults.set(token, forKey: todoistTokenKey)
+        if token.isEmpty {
+            _ = KeychainHelper.delete()
+        } else {
+            _ = KeychainHelper.set(token)
+        }
+        defaults.removeObject(forKey: todoistTokenKey)
     }
 
     func isSoundEnabled() -> Bool {
@@ -393,5 +410,57 @@ extension Color {
         } else {
             return String(format: "#%02X%02X%02X%02X", r, g, b, a)
         }
+    }
+}
+
+// MARK: - Keychain Security Helper
+struct KeychainHelper {
+    static let service = "com.anand.FlightNotifier"
+    static let account = "todoist_token"
+    
+    static func set(_ value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        
+        _ = delete()
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+    
+    static func get() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var dataTypeRef: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
+        
+        if status == errSecSuccess, let data = dataTypeRef as? Data {
+            return String(data: data, encoding: .utf8)
+        }
+        return nil
+    }
+    
+    static func delete() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 }

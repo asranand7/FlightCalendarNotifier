@@ -15,13 +15,16 @@ class CalendarManager {
 
     func requestAccess(completion: @escaping (Bool) -> Void) {
         let status = EKEventStore.authorizationStatus(for: .event)
-        if status == .authorized {
-            completion(true)
-            return
-        }
-        if #available(macOS 14.0, *), status.rawValue == 4 { // fullAccess
-            completion(true)
-            return
+        if #available(macOS 14.0, *) {
+            if status == .fullAccess {
+                completion(true)
+                return
+            }
+        } else {
+            if status == .authorized {
+                completion(true)
+                return
+            }
         }
         if status == .notDetermined {
             if #available(macOS 14.0, *) {
@@ -40,9 +43,11 @@ class CalendarManager {
     
     func isCalendarAuthorized() -> Bool {
         let status = EKEventStore.authorizationStatus(for: .event)
-        if status == .authorized { return true }
-        if #available(macOS 14.0, *), status.rawValue == 4 { return true }
-        return false
+        if #available(macOS 14.0, *) {
+            return status == .fullAccess
+        } else {
+            return status == .authorized
+        }
     }
     
     // MARK: - Native EventKit fetching
