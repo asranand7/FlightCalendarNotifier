@@ -3,6 +3,8 @@
 A lightweight macOS menu-bar app that flies an animated banner across your screen
 before calendar meetings and timed Todoist tasks, so you never miss the start.
 
+![Flyby in Action](assets/screenshot_banner_in_action.png)
+
 - **Calendar reminders** — reads your macOS Calendar (Google/iCloud/Exchange accounts synced to Calendar.app) natively via EventKit.
 - **Todoist reminders** — fetches timed tasks via the Todoist API.
 - **Per-source alert intervals** — choose independently when to be reminded (1, 2, 5, 10, 15, 30 min before) for Calendar and Todoist.
@@ -96,6 +98,22 @@ All settings live in the app window (open it from the menu-bar ✈️ icon → o
 
 Use the **Test Animation** button (top-right toolbar) to preview the banner anytime.
 General preferences are stored in `UserDefaults` (`com.anand.FlightNotifier`), while the Todoist API token is stored securely in the **macOS Keychain**.
+
+---
+
+## Screenshots
+
+### Integrations Settings
+![Integrations Settings](assets/screenshot_integrations.png)
+
+### Reminders & Sound Settings
+![Reminders Settings](assets/screenshot_reminders.png)
+
+### Animation Themes Selection
+![Appearance Settings](assets/screenshot_appearance.png)
+
+### Notification Log / History
+![History Settings](assets/screenshot_history.png)
 
 ---
 
