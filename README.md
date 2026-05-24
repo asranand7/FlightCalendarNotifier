@@ -6,7 +6,9 @@ before calendar meetings and timed Todoist tasks, so you never miss the start.
 - **Calendar reminders** — reads your macOS Calendar (Google/iCloud/Exchange accounts synced to Calendar.app) natively via EventKit.
 - **Todoist reminders** — fetches timed tasks via the Todoist API.
 - **Per-source alert intervals** — choose independently when to be reminded (1, 2, 5, 10, 15, 30 min before) for Calendar and Todoist.
-- **Customizable banner** — theme (plane, F1 car, rocket, custom emoji…), size, speed, position, colors.
+- **Customizable banner** — theme (plane, F1 car, rocket, custom image, or 18+ high-quality character themes like Snoopy, Superhero, Modiji, Trump, Thor, Wonder Woman), size, speed, position, colors.
+- **Notification History** — view a rolling list of the last 50 triggered notifications with source icons, timestamps, and quick cleanup.
+- **Secure Credentials** — sensitive API keys are stored safely inside the native macOS Keychain.
 - **Launch at Login** — keep it running quietly in the background.
 
 ---
@@ -73,6 +75,8 @@ background. You can confirm/manage it under **System Settings → General → Lo
 2. In Flyby → **Reminders → Enable Todoist Reminders**, paste the token, and click **Verify**.
 3. Use **Sync Now** to pull tasks immediately; otherwise tasks auto-sync every 10 minutes.
 
+Your API token is encrypted and stored securely in the **macOS Keychain** (`com.anand.FlightNotifier` / `todoist_token`), keeping it protected.
+
 Only tasks with a **specific time** (e.g. "today at 3pm") trigger banners — date-only
 tasks are ignored. Both fixed-timezone and floating (no-timezone) times are supported.
 
@@ -84,12 +88,13 @@ All settings live in the app window (open it from the menu-bar ✈️ icon → o
 
 | Pane | What you can change |
 |------|---------------------|
-| **General** | Launch at Login, Calendar permission status, version |
-| **Reminders** | Enable Calendar / Todoist, per-source alert intervals, Todoist token & sync |
-| **Appearance** | Animation theme, banner width/height, flight speed, position, card & text colors |
+| **General** | Launch at Login, Calendar permission status, version info |
+| **Reminders** | Enable Calendar / Todoist, per-source alert intervals, Todoist token verification & sync controls |
+| **Appearance** | Animation theme (18+ presets + custom images), banner width/height, flight speed, position, card/text colors |
+| **History** | View and clear the last 50 triggered notifications |
 
 Use the **Test Animation** button (top-right toolbar) to preview the banner anytime.
-Settings are stored in `UserDefaults` (`com.anand.FlightNotifier`).
+General preferences are stored in `UserDefaults` (`com.anand.FlightNotifier`), while the Todoist API token is stored securely in the **macOS Keychain**.
 
 ---
 
