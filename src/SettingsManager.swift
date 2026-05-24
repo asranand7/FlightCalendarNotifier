@@ -23,6 +23,8 @@ class SettingsManager {
     private let todoistSyncIntervalKey = "todoist_sync_interval"
     private let soundEnabledKey = "sound_enabled"
     private let soundTypeKey = "sound_type"
+    private let notificationHistoryKey = "notification_history"
+    private let historyCapacity = 50
 
     init() {
         if defaults.object(forKey: enabledThresholdsKey) == nil {
@@ -261,6 +263,32 @@ class SettingsManager {
         defaults.set(date, forKey: lastTodoistSyncKey)
     }
 
+    // MARK: - Notification History
+
+    func notificationHistory() -> [NotificationEntry] {
+        guard let data = defaults.data(forKey: notificationHistoryKey) else { return [] }
+        return (try? JSONDecoder().decode([NotificationEntry].self, from: data)) ?? []
+    }
+
+    func addNotificationEntry(title: String, source: String, threshold: Int) {
+        var history = notificationHistory()
+        let entry = NotificationEntry(title: title, source: source, threshold: threshold, date: Date())
+        history.insert(entry, at: 0)
+        if history.count > historyCapacity {
+            history = Array(history.prefix(historyCapacity))
+        }
+        if let data = try? JSONEncoder().encode(history) {
+            defaults.set(data, forKey: notificationHistoryKey)
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Notification.Name("NotificationHistoryUpdated"), object: nil)
+        }
+    }
+
+    func clearNotificationHistory() {
+        defaults.removeObject(forKey: notificationHistoryKey)
+    }
+
     func setCustomImagePath(_ path: String?) {
         if let path = path {
             defaults.set(path, forKey: customImagePathKey)
@@ -318,6 +346,14 @@ class SettingsManager {
         try? pngData.write(to: dest)
         return dest
     }
+}
+
+struct NotificationEntry: Codable, Identifiable {
+    var id: UUID = UUID()
+    let title: String
+    let source: String   // "Calendar" or "Todoist"
+    let threshold: Int   // minutes before (0 = late)
+    let date: Date
 }
 
 extension Color {

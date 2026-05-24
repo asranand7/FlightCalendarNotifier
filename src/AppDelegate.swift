@@ -324,26 +324,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                         platform: event.platform,
                                         meetingUrl: event.url
                                     )
-                                }
-                            }
-                        }
-                        
-                        // "You're Late!" check: event started 2-5 min ago with no late notification yet
-                        if diffInSeconds < 0 && diffInSeconds >= -300 {
-                            let lateMinutes = Int(round(-diffInSeconds / 60.0))
-                            if lateMinutes >= 2 {
-                                var triggeredSet = self.triggeredEvents[eventId] ?? Set<Int>()
-                                if !triggeredSet.contains(-1) { // -1 is the sentinel for "late" notification
-                                    print("🚨 YOU'RE LATE! Event [\(event.title)] started \(lateMinutes)m ago!")
-                                    triggeredSet.insert(-1)
-                                    self.triggeredEvents[eventId] = triggeredSet
-                                    self.showFlightAnimation(
-                                        meetingTitle: event.title,
-                                        minutesRemaining: 0,
-                                        startDate: event.startDate,
-                                        endDate: event.endDate,
-                                        platform: event.platform,
-                                        meetingUrl: event.url
+                                    self.settingsManager.addNotificationEntry(
+                                        title: event.title,
+                                        source: "Calendar",
+                                        threshold: threshold
                                     )
                                 }
                             }
@@ -396,6 +380,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                 endDate: nil, // Tasks do not have an end time
                                 platform: "Todoist",
                                 meetingUrl: task.url
+                            )
+                            self.settingsManager.addNotificationEntry(
+                                title: task.content,
+                                source: "Todoist",
+                                threshold: threshold
                             )
                         }
                     }

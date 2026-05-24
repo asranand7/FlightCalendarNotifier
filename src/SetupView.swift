@@ -7,6 +7,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case integrations = "Integrations"
     case reminders = "Reminders"
     case appearance = "Appearance"
+    case history = "History"
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .integrations: return "puzzlepiece.extension"
         case .reminders: return "bell.badge"
         case .appearance: return "paintbrush.pointed"
+        case .history: return "clock.arrow.circlepath"
         }
     }
 }
@@ -56,6 +58,7 @@ struct SetupView: View {
     @State private var todoistSyncInterval: Int = 300
     @State private var isSoundEnabled: Bool = true
     @State private var selectedSoundType: String = "Glass"
+    @State private var notificationHistory: [NotificationEntry] = []
 
     private let syncIntervalOptions: [(label: String, seconds: Int)] = [
         ("1 min",  60),
@@ -128,6 +131,7 @@ struct SetupView: View {
         case .integrations: integrationsPane
         case .reminders: remindersPane
         case .appearance: appearancePane
+        case .history: historyPane
         }
     }
 
@@ -144,6 +148,105 @@ struct SetupView: View {
                 infoRow("Version", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")
             }
         }
+    }
+
+    // MARK: - History Pane
+
+    private var historyPane: some View {
+        paneScroll {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Notification Log")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Last \(notificationHistory.count) reminder\(notificationHistory.count == 1 ? "" : "s") sent by Flyby")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if !notificationHistory.isEmpty {
+                    Button(role: .destructive) {
+                        settingsManager.clearNotificationHistory()
+                        notificationHistory = []
+                    } label: {
+                        Label("Clear All", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if notificationHistory.isEmpty {
+                glassCard {
+                    HStack(spacing: 10) {
+                        Image(systemName: "tray")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 24))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("No reminders yet")
+                                .fontWeight(.medium)
+                            Text("Flyby will log every reminder banner here as it flies.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            } else {
+                glassCard {
+                    ForEach(Array(notificationHistory.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 {
+                            Divider().opacity(0.3)
+                        }
+                        historyRow(entry)
+                    }
+                }
+            }
+        }
+        .onAppear { notificationHistory = settingsManager.notificationHistory() }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("NotificationHistoryUpdated"))) { _ in
+            notificationHistory = settingsManager.notificationHistory()
+        }
+    }
+
+    @ViewBuilder
+    private func historyRow(_ entry: NotificationEntry) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: entry.source == "Todoist" ? "checkmark.circle" : "calendar")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(entry.source == "Todoist" ? Color.red : Color.blue)
+                .frame(width: 28, height: 28)
+                .background(
+                    (entry.source == "Todoist" ? Color.red : Color.blue).opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(entry.source)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("•")
+                        .foregroundStyle(.quaternary)
+                    Text(entry.threshold == 0 ? "You're Late!" : "\(entry.threshold) min before")
+                        .font(.system(size: 11))
+                        .foregroundStyle(entry.threshold == 0 ? Color.orange : Color.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(entry.date, style: .time)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text(entry.date, style: .date)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private var integrationsPane: some View {
