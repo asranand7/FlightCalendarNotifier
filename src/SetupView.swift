@@ -46,6 +46,7 @@ struct SetupView: View {
     @State private var customTextColor: Color = Color(hex: "#FFFFFF")
 
     @State private var isCalendarEnabled: Bool = false
+    @State private var ignoredKeywords: String = ""
     @State private var isTodoistEnabled: Bool = false
     @State private var calendarThresholds: Set<Int> = []
     @State private var todoistThresholds: Set<Int> = []
@@ -276,6 +277,22 @@ struct SetupView: View {
                             Button("Grant…") { requestPermission() }
                                 .buttonStyle(.borderedProminent)
                         }
+                    }
+                    Divider().opacity(0.4)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Ignore Keywords")
+                            Spacer()
+                            TextField("e.g. Focus, OOO, Lunch", text: $ignoredKeywords)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 200)
+                                .onChange(of: ignoredKeywords) {
+                                    settingsManager.setIgnoredKeywords(ignoredKeywords)
+                                }
+                        }
+                        Text("Comma-separated list of keywords to ignore. Events containing these in the title will not trigger banners.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
                     }
                     Divider().opacity(0.4)
                     HStack {
@@ -939,6 +956,7 @@ struct SetupView: View {
         lastAutoSync = settingsManager.lastTodoistSync()
         todoistSyncInterval = settingsManager.todoistSyncInterval()
         isCalendarEnabled = settingsManager.isCalendarEnabled()
+        ignoredKeywords = settingsManager.ignoredKeywords()
         isTodoistEnabled = settingsManager.isTodoistEnabled()
         calendarThresholds = Set(settingsManager.calendarThresholds())
         todoistThresholds = Set(settingsManager.todoistThresholds())

@@ -12,6 +12,7 @@ struct CalendarEvent: Codable {
 
 class CalendarManager {
     let eventStore = EKEventStore()
+    private let settingsManager = SettingsManager()
 
     func requestAccess(completion: @escaping (Bool) -> Void) {
         let status = EKEventStore.authorizationStatus(for: .event)
@@ -107,7 +108,7 @@ class CalendarManager {
         let now = Date()
         let predicate = eventStore.predicateForEvents(withStart: now.addingTimeInterval(-5 * 60), end: now.addingTimeInterval(45 * 60), calendars: nil)
         let result = eventStore.events(matching: predicate)
-            .filter { !$0.isAllDay && !isDeclined($0) }
+            .filter { !$0.isAllDay && !isDeclined($0) && !settingsManager.shouldIgnoreEvent(title: $0.title ?? "") }
             .map { mapEvent($0) }
         completion(result)
     }
@@ -117,7 +118,7 @@ class CalendarManager {
         let now = Date()
         let predicate = eventStore.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 60 * 60), calendars: nil)
         let result = eventStore.events(matching: predicate)
-            .filter { !$0.isAllDay && !isDeclined($0) && $0.startDate > now }
+            .filter { !$0.isAllDay && !isDeclined($0) && $0.startDate > now && !settingsManager.shouldIgnoreEvent(title: $0.title ?? "") }
             .sorted { $0.startDate < $1.startDate }
         completion(result.first.map { mapEvent($0) })
     }

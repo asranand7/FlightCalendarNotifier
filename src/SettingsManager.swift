@@ -25,6 +25,7 @@ class SettingsManager {
     private let soundEnabledKey = "sound_enabled"
     private let soundTypeKey = "sound_type"
     private let notificationHistoryKey = "notification_history"
+    private let ignoredKeywordsKey = "ignored_keywords"
     private let historyCapacity = 50
 
     init() {
@@ -96,6 +97,9 @@ class SettingsManager {
         }
         if defaults.object(forKey: soundTypeKey) == nil {
             defaults.set("Glass", forKey: soundTypeKey)
+        }
+        if defaults.object(forKey: ignoredKeywordsKey) == nil {
+            defaults.set("", forKey: ignoredKeywordsKey)
         }
     }
     
@@ -257,6 +261,29 @@ class SettingsManager {
 
     func setSoundType(_ type: String) {
         defaults.set(type, forKey: soundTypeKey)
+    }
+
+    func ignoredKeywords() -> String {
+        return defaults.string(forKey: ignoredKeywordsKey) ?? ""
+    }
+    
+    func setIgnoredKeywords(_ keywords: String) {
+        defaults.set(keywords, forKey: ignoredKeywordsKey)
+    }
+    
+    func shouldIgnoreEvent(title: String) -> Bool {
+        let keywordsStr = ignoredKeywords()
+        guard !keywordsStr.isEmpty else { return false }
+        
+        let keywords = keywordsStr
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+            
+        guard !keywords.isEmpty else { return false }
+        
+        let lowerTitle = title.lowercased()
+        return keywords.contains { lowerTitle.contains($0) }
     }
 
     func customImagePath() -> String? {
